@@ -10,7 +10,7 @@ const TURQUOISE: Color = Color::rgb(
 	0x88 as f32 / 256.0,
 );
 const PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
-const MUR: u32 = 64;
+const MUR: u32 = 48;
 const DIM: (u32, u32) = (1280, 960);
 
 fn main() {
@@ -26,6 +26,8 @@ fn main() {
 		}],
 		last_render: Instant::now(),
 		score: 0.0,
+		barrels: vec![],
+		barrel_count: 5,
 	};
 
 	loop {
@@ -33,9 +35,15 @@ fn main() {
 
 		events.iter().for_each(|e| match e {
 			SmittenEvent::MouseDown { button } => {
-				let pos = game.smitten.mouse_position();
-				println!("{}", pos);
+				let pos = game.smitten.mouse_position_absolute();
+				let angle = pos.normalize_correct().angle();
+				println!("{pos} - angle {angle}");
 				game.shoot();
+			}
+			SmittenEvent::Keydown { key, .. } => {
+				if let Some(Key::E) = key {
+					game.place_barrel();
+				}
 			}
 			_ => (),
 		});
@@ -77,6 +85,8 @@ struct Game {
 	enemies: Vec<Enemy>,
 	last_render: Instant,
 	score: f32,
+	barrels: Vec<Barrel>,
+	barrel_count: usize,
 }
 
 impl Game {
@@ -84,7 +94,7 @@ impl Game {
 	const BULLET_SPEED: f32 = 20.0;
 	const BULLET_WIDTH: u32 = 4;
 	const BULLET_WIDTH_MUR: f32 = Game::BULLET_WIDTH as f32 / MUR as f32;
-	const PLAYER_LENGTH: f32 = 0.5;
+	const PLAYER_LENGTH: f32 = 0.75;
 	const PLAYER_DIM: Vec2 = Vec2::new(Game::PLAYER_LENGTH, Game::PLAYER_LENGTH);
 
 	pub fn rect<P: Into<Vec2>, D: Into<Vec2>, R: Into<Draw>>(&self, pos: P, dim: D, draw: R) {
@@ -99,6 +109,14 @@ impl Game {
 				center: bullet.position - self.camera,
 				radius: 4,
 				color: Color::rgb(1.0, 0.0, 0.0),
+			})
+		}
+
+		for barrel in &self.barrels {
+			self.smitten.sdf(SignedDistance::Circle {
+				center: barrel.position - self.camera,
+				radius: MUR / 2,
+				color: Color::rgb(0.0, 1.0, 0.0),
 			})
 		}
 
@@ -135,6 +153,50 @@ impl Game {
 		let direction = self.smitten.mouse_position().normalize_correct();
 		let bullet = Bullet::new(self.camera, direction * Game::BULLET_SPEED);
 		self.bullets.push(bullet);
+	}
+
+	pub fn place_barrel(&mut self) {
+		if self.barrel_count == 0 {
+			return;
+		}
+
+		let direction = self.smitten.mouse_position_absolute().normalize_correct();
+
+		let place_direction = if direction.x.abs() > direction.y.abs() {
+			// It's horizontal
+			if direction.x > 0.0 {
+				Vec2::new(1.0, 0.0)
+			} else {
+				Vec2::new(-1.0, 0.0)
+			}
+		} else {
+			// Vertical
+			if direction.y > 0.0 {
+				Vec2::new(0.0, 1.0)
+			} else {
+				Vec2::new(0.0, -1.0)
+			}
+		};
+
+		let position = (self.camera + place_direction).operation(f32::floor);
+
+		if self.has_barrel_at(position) {
+			println!("Barrel already at {position}, not placing another!");
+			return;
+		}
+		self.barrel_count -= 1;
+
+		self.barrels.push(Barrel {
+			position,
+			health: 1.0,
+		});
+	}
+
+	fn has_barrel_at(&self, pos: Vec2) -> bool {
+		self.barrels
+			.iter()
+			.find(|bar| bar.position == pos)
+			.is_some()
 	}
 
 	fn do_hits(&mut self) -> Vec<(Enemy, Bullet)> {
@@ -219,4 +281,10 @@ impl Bullet {
 struct Enemy {
 	position: Vec2,
 	color: Color,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Barrel {
+	position: Vec2,
+	health: f32,
 }
