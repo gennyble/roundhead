@@ -23,11 +23,32 @@ fn main() {
 		smitten: smitty,
 		camera: Vec2::ZERO,
 		bullets: vec![],
-		enemies: vec![Enemy {
-			position: Vec2::new(5.0, 5.0),
-			color: PURPLE,
-			health: 1.0,
-		}],
+		enemies: vec![
+			Enemy {
+				position: Vec2::new(5.0, 5.0),
+				color: PURPLE,
+				health: 1.0,
+				speed: 1.25,
+			},
+			Enemy {
+				position: Vec2::new(5.0, 3.0),
+				color: Color::BLUE,
+				health: 1.0,
+				speed: 2.0,
+			},
+			Enemy {
+				position: Vec2::new(5.0, 3.0),
+				color: Color::BLUE,
+				health: 1.0,
+				speed: 2.2,
+			},
+			Enemy {
+				position: Vec2::new(5.0, 3.0),
+				color: Color::BLUE,
+				health: 1.0,
+				speed: 3.0,
+			},
+		],
 		last_render: Instant::now(),
 		score: 0.0,
 		barrels: vec![],
@@ -149,13 +170,7 @@ impl Game {
 
 		let hits = Self::do_hits(&mut self.enemies, &mut self.bullets);
 		Self::burry_dead(&mut self.enemies);
-
-		let speed = 1.25;
-		for enemy in self.enemies.iter_mut() {
-			let direction = (self.camera - enemy.position).normalize_correct();
-			let movement = direction * speed;
-			enemy.position += movement * dsec as f32;
-		}
+		self.move_enemies(delta);
 
 		let barrel_hits = Self::do_hits(&mut self.barrels, &mut self.bullets);
 		Self::burry_dead(&mut self.barrels);
@@ -262,6 +277,46 @@ impl Game {
 			}
 		}
 	}
+
+	fn move_enemies(&mut self, delta: Duration) {
+		let mut moved = vec![];
+
+		let fix = |enemy: &mut Enemy, others: &[Enemy]| {
+			others.iter().for_each(|other| {
+				let dist = enemy.position.distance_with(other.position);
+
+				if dist < enemy.bounding_circle().radius {
+					let dir = enemy.position - other.position;
+					/*println!(
+						"{} - {} - {}",
+						dir,
+						dir.normalize_correct(),
+						(dir.normalize_correct() * enemy.bounding_circle().radius).length()
+					);*/
+					let wanted = enemy.bounding_circle().radius;
+					enemy.position += dir.normalize_correct() * (wanted - dir.length());
+				}
+			})
+		};
+
+		loop {
+			match self.enemies.pop() {
+				None => break,
+				Some(mut enemy) => {
+					let direction = (self.camera - enemy.position).normalize_correct();
+					let movement = direction * enemy.speed;
+					enemy.position += movement * delta.as_secs_f32();
+
+					fix(&mut enemy, &self.enemies);
+					fix(&mut enemy, &moved);
+
+					moved.push(enemy);
+				}
+			}
+		}
+
+		self.enemies = moved;
+	}
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -286,6 +341,7 @@ struct Enemy {
 	position: Vec2,
 	color: Color,
 	health: f32,
+	speed: f32,
 }
 
 impl Hittable for Enemy {
