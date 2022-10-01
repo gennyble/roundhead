@@ -11,9 +11,10 @@ const TURQUOISE: Color = Color::rgb(
 );
 const PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
 const MUR: u32 = 64;
+const DIM: (u32, u32) = (1280, 960);
 
 fn main() {
-	let smitty = Smitten::new((1280, 960), "Roundhead", MUR);
+	let smitty = Smitten::new(DIM, "Roundhead", MUR);
 
 	let mut game = Game {
 		smitten: smitty,
@@ -24,6 +25,7 @@ fn main() {
 			color: PURPLE,
 		}],
 		last_render: Instant::now(),
+		score: 0.0,
 	};
 
 	loop {
@@ -74,6 +76,7 @@ struct Game {
 	bullets: Vec<Bullet>,
 	enemies: Vec<Enemy>,
 	last_render: Instant,
+	score: f32,
 }
 
 impl Game {
@@ -89,9 +92,11 @@ impl Game {
 	}
 
 	pub fn draw(&self) {
+		self.draw_grid();
+
 		for bullet in &self.bullets {
 			self.smitten.sdf(SignedDistance::Circle {
-				center: bullet.position,
+				center: bullet.position - self.camera,
 				radius: 4,
 				color: Color::rgb(1.0, 0.0, 0.0),
 			})
@@ -120,7 +125,10 @@ impl Game {
 			.iter_mut()
 			.for_each(|bul| bul.position += bul.velocity * dsec as f32);
 
-		self.do_hits();
+		let hits = self.do_hits();
+		for (enemy, _) in hits {
+			self.score += 1.0;
+		}
 	}
 
 	pub fn shoot(&mut self) {
@@ -166,6 +174,27 @@ impl Game {
 	// Lazy collisions; everything is a circle
 	fn enemy_hit(enemy: &Enemy, bullet: &Bullet) -> bool {
 		enemy.position.distance_with(bullet.position) < Game::PLAYER_LENGTH
+	}
+
+	fn draw_grid(&self) {
+		let mur_width = (DIM.0 / MUR) + 3;
+		let mur_height = (DIM.1 / MUR) + 3;
+
+		for x in 0..mur_width {
+			for y in 0..mur_height {
+				let x = x as f32 - mur_width as f32 / 2.0;
+				let y = y as f32 - mur_height as f32 / 2.0;
+
+				let camera = Vec2::new(self.camera.x.fract(), self.camera.y.fract());
+
+				let pos = Vec2::new(x.floor(), y.floor()) - camera;
+				self.smitten.sdf(SignedDistance::Circle {
+					center: pos,
+					radius: 4,
+					color: Color::grey(0.5),
+				});
+			}
+		}
 	}
 }
 
