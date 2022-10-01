@@ -150,6 +150,13 @@ impl Game {
 		let hits = Self::do_hits(&mut self.enemies, &mut self.bullets);
 		Self::burry_dead(&mut self.enemies);
 
+		let speed = 1.25;
+		for enemy in self.enemies.iter_mut() {
+			let direction = (self.camera - enemy.position).normalize_correct();
+			let movement = direction * speed;
+			enemy.position += movement * dsec as f32;
+		}
+
 		let barrel_hits = Self::do_hits(&mut self.barrels, &mut self.bullets);
 		Self::burry_dead(&mut self.barrels);
 	}
