@@ -14,7 +14,8 @@ use std::{
 };
 
 use smitten::{
-	Color, Draw, HorizontalAnchor, Key, SignedDistance, Smitten, SmittenEvent, Vec2, VerticalAnchor,
+	Color, Draw, FontId, HorizontalAnchor, Key, SignedDistance, Smitten, SmittenEvent, Vec2,
+	VerticalAnchor,
 };
 
 const TURQUOISE: Color = Color::rgb(
@@ -27,9 +28,10 @@ const MUR: u32 = 48;
 const DIM: (u32, u32) = (1280, 960);
 
 fn main() {
-	let smitty = Smitten::new(DIM, "Roundhead", MUR);
+	let mut smitty = Smitten::new(DIM, "Roundhead", MUR);
 
 	let cooldown = Cooldown::ready(Duration::from_secs(1));
+	let font = smitty.make_font("Cabin-Regular.ttf");
 
 	let mut game = Game {
 		smitten: smitty,
@@ -71,6 +73,7 @@ fn main() {
 		barrels: vec![],
 		barrel_count: 5,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
+		font,
 	};
 
 	loop {
@@ -93,6 +96,10 @@ fn main() {
 
 		if game.smitten.is_key_down(Key::Escape) {
 			break;
+		}
+
+		if game.smitten.is_key_down(Key::M) {
+			game.shoot();
 		}
 
 		let mut movec = Vec2::ZERO;
@@ -132,6 +139,7 @@ struct Game {
 	barrels: Vec<Barrel>,
 	barrel_count: usize,
 	wave_timer: Cooldown,
+	font: FontId,
 }
 
 impl Game {
@@ -173,6 +181,8 @@ impl Game {
 
 		// Draw us. We're not affected by player.position movement
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
+
+		self.smitten.write(self.font, "Testing!", (0.0, 0.0));
 
 		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
