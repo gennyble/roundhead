@@ -1,6 +1,9 @@
 #![feature(drain_filter)]
 
-use std::time::{Duration, Instant};
+use std::{
+	ops::{Add, Mul, Sub},
+	time::{Duration, Instant},
+};
 
 use smitten::{Color, Draw, Key, SignedDistance, Smitten, SmittenEvent, Vec2};
 
@@ -23,6 +26,7 @@ fn main() {
 		enemies: vec![Enemy {
 			position: Vec2::new(5.0, 5.0),
 			color: PURPLE,
+			health: 1.0,
 		}],
 		last_render: Instant::now(),
 		score: 0.0,
@@ -116,7 +120,7 @@ impl Game {
 			self.smitten.sdf(SignedDistance::Circle {
 				center: barrel.position - self.camera,
 				radius: MUR / 2,
-				color: Color::rgb(0.0, 1.0, 0.0),
+				color: barrel.damage_color(),
 			})
 		}
 
@@ -143,10 +147,11 @@ impl Game {
 			.iter_mut()
 			.for_each(|bul| bul.position += bul.velocity * dsec as f32);
 
-		let hits = self.do_hits();
-		for (enemy, _) in hits {
-			self.score += 1.0;
-		}
+		let hits = Self::do_hits(&mut self.enemies, &mut self.bullets);
+		Self::burry_dead(&mut self.enemies);
+
+		let barrel_hits = Self::do_hits(&mut self.barrels, &mut self.bullets);
+		Self::burry_dead(&mut self.barrels);
 	}
 
 	pub fn shoot(&mut self) {
@@ -188,7 +193,7 @@ impl Game {
 
 		self.barrels.push(Barrel {
 			position,
-			health: 1.0,
+			health: Barrel::BARREL_HEALTH,
 		});
 	}
 
@@ -199,24 +204,20 @@ impl Game {
 			.is_some()
 	}
 
-	fn do_hits(&mut self) -> Vec<(Enemy, Bullet)> {
-		let mut hit = vec![];
-
-		let mut enemies_alive = vec![];
-
-		'enemy: for enemy in self.enemies.drain(..) {
+	fn do_hits<H: Hittable>(hittables: &mut Vec<H>, bullets: &mut Vec<Bullet>) {
+		'enemy: for enemy in hittables.iter_mut() {
 			let mut unhit_bullets = vec![];
 
 			loop {
-				match self.bullets.pop() {
+				match bullets.pop() {
 					None => {
-						self.bullets.extend(unhit_bullets);
+						bullets.extend(unhit_bullets);
 						break;
 					}
 					Some(bullet) => {
-						if Self::enemy_hit(&enemy, &bullet) {
-							hit.push((enemy, bullet));
-							self.bullets.extend(unhit_bullets);
+						if enemy.was_hit(&bullet) {
+							enemy.hit();
+							bullets.extend(unhit_bullets);
 							continue 'enemy;
 						} else {
 							unhit_bullets.push(bullet);
@@ -224,18 +225,14 @@ impl Game {
 					}
 				}
 			}
-
-			enemies_alive.push(enemy);
 		}
-
-		self.enemies = enemies_alive;
-
-		hit
 	}
 
-	// Lazy collisions; everything is a circle
-	fn enemy_hit(enemy: &Enemy, bullet: &Bullet) -> bool {
-		enemy.position.distance_with(bullet.position) < Game::PLAYER_LENGTH
+	// Why did you choose this name lol
+	fn burry_dead<D: Destructible>(things: &mut Vec<D>) -> Vec<D> {
+		let (alive, dead) = things.drain(..).partition(|d| d.health() > 0.0);
+		things.extend(alive);
+		dead
 	}
 
 	fn draw_grid(&self) {
@@ -281,10 +278,99 @@ impl Bullet {
 struct Enemy {
 	position: Vec2,
 	color: Color,
+	health: f32,
+}
+
+impl Hittable for Enemy {
+	fn bounding_circle(&self) -> BoundingCircle {
+		BoundingCircle {
+			position: self.position,
+			radius: Game::PLAYER_LENGTH,
+		}
+	}
+
+	fn hit(&mut self) {
+		self.health = 0.0;
+	}
+}
+
+impl Destructible for Enemy {
+	fn health(&self) -> f32 {
+		self.health
+	}
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct Barrel {
 	position: Vec2,
 	health: f32,
+}
+
+impl Barrel {
+	const BARREL_HEALTH: f32 = 10.0;
+
+	pub fn damage_color(&self) -> Color {
+		color_lerp(
+			Color::GREEN,
+			Color::RED,
+			self.health / Barrel::BARREL_HEALTH,
+		)
+	}
+}
+
+impl Hittable for Barrel {
+	fn bounding_circle(&self) -> BoundingCircle {
+		BoundingCircle {
+			position: self.position,
+			radius: 1.0,
+		}
+	}
+
+	fn hit(&mut self) {
+		self.health -= 1.0;
+	}
+}
+
+impl Destructible for Barrel {
+	fn health(&self) -> f32 {
+		self.health
+	}
+}
+
+struct BoundingCircle {
+	position: Vec2,
+	radius: f32,
+}
+
+trait Hittable {
+	fn bounding_circle(&self) -> BoundingCircle;
+
+	fn hit(&mut self);
+
+	fn was_hit(&self, bullet: &Bullet) -> bool {
+		let bounds = self.bounding_circle();
+		bounds.position.distance_with(bullet.position) < bounds.radius
+	}
+}
+
+trait Destructible {
+	fn health(&self) -> f32;
+}
+
+fn lerp<T>(a: T, b: T, c: f32) -> T
+where
+	T: Clone + Add<Output = T> + Sub<Output = T> + Mul<f32, Output = T>,
+{
+	let diff = b - a.clone();
+	a + diff * c
+}
+
+fn color_lerp(a: Color, b: Color, c: f32) -> Color {
+	let c = 1.0 - c;
+	let r = a.r + ((b.r - a.r) * c);
+	let g = a.g + ((b.g - a.g) * c);
+	let bl = a.b + ((b.b - a.b) * c);
+	let a = a.a + ((b.a - a.a) * c);
+
+	Color { r, g, b: bl, a }
 }
