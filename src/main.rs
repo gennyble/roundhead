@@ -183,7 +183,7 @@ impl Game {
 			}
 		};
 
-		let position = (self.camera + place_direction).operation(f32::floor);
+		let position = (self.camera + place_direction).operation(f32::round);
 
 		if self.has_barrel_at(position) {
 			println!("Barrel already at {position}, not placing another!");
@@ -244,7 +244,7 @@ impl Game {
 				let x = x as f32 - mur_width as f32 / 2.0;
 				let y = y as f32 - mur_height as f32 / 2.0;
 
-				let camera = Vec2::new(self.camera.x.fract(), self.camera.y.fract());
+				let camera = self.camera.operation(f32::fract);
 
 				let pos = Vec2::new(x.floor(), y.floor()) - camera;
 				self.smitten.sdf(SignedDistance::Circle {
