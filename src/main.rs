@@ -5,7 +5,7 @@ mod traits;
 mod util;
 
 use things::{Barrel, Bullet, Enemy};
-use traits::{Destructible, Hittable};
+use traits::{Colideable, Destructible, Hittable};
 use util::Cooldown;
 
 use std::{
@@ -33,7 +33,7 @@ fn main() {
 
 	let mut game = Game {
 		smitten: smitty,
-		camera: Vec2::ZERO,
+		player: Player::default(),
 		bullets: vec![],
 		enemies: vec![
 			Enemy {
@@ -108,7 +108,7 @@ fn main() {
 		}
 
 		movec = movec.normalize_correct() * (1.5 / 32.0);
-		game.camera += movec;
+		game.player.position += movec;
 
 		game.tick();
 
@@ -119,10 +119,10 @@ fn main() {
 	}
 }
 
-// A higher level struct so I can keep a camera et al.
+// A higher level struct so I can keep a player.position et al.
 struct Game {
 	smitten: Smitten,
-	camera: Vec2,
+	player: Player,
 	bullets: Vec<Bullet>,
 	enemies: Vec<Enemy>,
 	last_render: Instant,
@@ -142,7 +142,8 @@ impl Game {
 	const PLAYER_HEALTH_MAX: f32 = 10.0;
 
 	pub fn rect<P: Into<Vec2>, D: Into<Vec2>, R: Into<Draw>>(&self, pos: P, dim: D, draw: R) {
-		self.smitten.rect(pos.into() - self.camera, dim, draw)
+		self.smitten
+			.rect(pos.into() - self.player.position, dim, draw)
 	}
 
 	pub fn draw(&self) {
@@ -150,7 +151,7 @@ impl Game {
 
 		for bullet in &self.bullets {
 			self.smitten.sdf(SignedDistance::Circle {
-				center: bullet.position - self.camera,
+				center: bullet.position - self.player.position,
 				radius: 4,
 				color: Color::rgb(1.0, 0.0, 0.0),
 			})
@@ -158,7 +159,7 @@ impl Game {
 
 		for barrel in &self.barrels {
 			self.smitten.sdf(SignedDistance::Circle {
-				center: barrel.position - self.camera,
+				center: barrel.position - self.player.position,
 				radius: MUR / 2,
 				color: barrel.damage_color(),
 			})
@@ -168,7 +169,7 @@ impl Game {
 			self.rect(enemy.position, Game::PLAYER_DIM, enemy.color)
 		}
 
-		// Draw us. We're not affected by camera movement
+		// Draw us. We're not affected by player.position movement
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
 
 		self.smitten.anchored_rect(
@@ -209,7 +210,7 @@ impl Game {
 
 	pub fn shoot(&mut self) {
 		let direction = self.smitten.mouse_position().normalize_correct();
-		let bullet = Bullet::new(self.camera, direction * Game::BULLET_SPEED);
+		let bullet = Bullet::new(self.player.position, direction * Game::BULLET_SPEED);
 		self.bullets.push(bullet);
 	}
 
@@ -236,7 +237,7 @@ impl Game {
 			}
 		};
 
-		let position = (self.camera + place_direction).operation(f32::round);
+		let position = (self.player.position + place_direction).operation(f32::round);
 
 		if self.has_barrel_at(position) {
 			println!("Barrel already at {position}, not placing another!");
@@ -297,7 +298,7 @@ impl Game {
 				let x = x as f32 - mur_width as f32 / 2.0;
 				let y = y as f32 - mur_height as f32 / 2.0;
 
-				let camera = self.camera.operation(f32::fract);
+				let camera = self.player.position.operation(f32::fract);
 
 				let pos = Vec2::new(x.floor(), y.floor()) - camera;
 				self.smitten.sdf(SignedDistance::Circle {
@@ -313,12 +314,19 @@ impl Game {
 		for enemy in self.enemies.iter_mut() {
 			enemy.cooldown.subtract(delta);
 
-			if enemy.cooldown.is_ready() {
-				let dist = (enemy.position - self.camera).length();
-
-				if dist < Self::PLAYER_LENGTH {
+			if colide_and_move(&self.player, enemy) {
+				if enemy.cooldown.is_ready() {
 					enemy.cooldown.reset();
 					self.health -= 1.0;
+				}
+			}
+
+			for barrel in self.barrels.iter_mut() {
+				if colide_and_move(barrel, enemy) {
+					if enemy.cooldown.is_ready() {
+						enemy.cooldown.reset();
+						barrel.health -= 1.0;
+					}
 				}
 			}
 		}
@@ -331,11 +339,10 @@ impl Game {
 			others.iter_mut().for_each(|other| {
 				let dist = enemy.position.distance_with(other.position);
 
-				if dist < enemy.bounding_circle().radius {
+				if dist < enemy.bounds().radius {
 					let dir = enemy.position - other.position;
 					//desired sepration
-					let wanted =
-						dir.normalize_correct() * (enemy.bounding_circle().radius - dir.length());
+					let wanted = dir.normalize_correct() * (enemy.bounds().radius - dir.length());
 
 					let collective_speed = enemy.speed + other.speed;
 
@@ -353,7 +360,7 @@ impl Game {
 			match self.enemies.pop() {
 				None => break,
 				Some(mut enemy) => {
-					let direction = (self.camera - enemy.position).normalize_correct();
+					let direction = (self.player.position - enemy.position).normalize_correct();
 					let movement = direction * enemy.speed;
 					enemy.position += movement * delta.as_secs_f32();
 
@@ -365,6 +372,24 @@ impl Game {
 			}
 		}
 		self.enemies.extend(moved.drain(..));
+	}
+}
+
+#[derive(Debug, Default)]
+struct Player {
+	position: Vec2,
+}
+
+impl Colideable for Player {
+	fn bounds(&self) -> BoundingCircle {
+		BoundingCircle {
+			position: self.position,
+			radius: Game::PLAYER_LENGTH,
+		}
+	}
+
+	fn position_mut(&mut self) -> &mut Vec2 {
+		&mut self.position
 	}
 }
 
@@ -389,4 +414,22 @@ fn color_lerp(a: Color, b: Color, c: f32) -> Color {
 	let a = a.a + ((b.a - a.a) * c);
 
 	Color { r, g, b: bl, a }
+}
+
+fn colide_and_move<A: Colideable, B: Colideable>(a: &A, b: &mut B) -> bool {
+	let abound = a.bounds();
+	let bbound = b.bounds();
+
+	let dist = abound.position.distance_with(bbound.position);
+
+	if dist < abound.radius {
+		let dir = abound.position - bbound.position;
+		//desired sepration
+		let wanted = dir.normalize_correct() * (abound.radius - dir.length());
+
+		*b.position_mut() -= wanted;
+		true
+	} else {
+		false
+	}
 }

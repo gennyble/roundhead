@@ -1,14 +1,19 @@
+use smitten::Vec2;
+
 use crate::{things::Bullet, BoundingCircle};
 
-pub trait Hittable {
-	fn bounding_circle(&self) -> BoundingCircle;
-
+pub trait Hittable: Colideable {
 	fn hit(&mut self);
 
 	fn was_hit(&self, bullet: &Bullet) -> bool {
-		let bounds = self.bounding_circle();
+		let bounds = self.bounds();
 		bounds.position.distance_with(bullet.position) < bounds.radius
 	}
+}
+
+pub trait Colideable {
+	fn bounds(&self) -> BoundingCircle;
+	fn position_mut(&mut self) -> &mut Vec2;
 }
 
 pub trait Destructible {

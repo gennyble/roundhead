@@ -3,7 +3,7 @@ use std::time::Instant;
 use smitten::{Color, Vec2};
 
 use crate::{
-	traits::{Destructible, Hittable},
+	traits::{Colideable, Destructible, Hittable},
 	util::Cooldown,
 	BoundingCircle, Game,
 };
@@ -34,14 +34,20 @@ pub struct Enemy {
 	pub cooldown: Cooldown,
 }
 
-impl Hittable for Enemy {
-	fn bounding_circle(&self) -> BoundingCircle {
+impl Colideable for Enemy {
+	fn bounds(&self) -> BoundingCircle {
 		BoundingCircle {
 			position: self.position,
 			radius: Game::PLAYER_LENGTH,
 		}
 	}
 
+	fn position_mut(&mut self) -> &mut Vec2 {
+		&mut self.position
+	}
+}
+
+impl Hittable for Enemy {
 	fn hit(&mut self) {
 		self.health = 0.0;
 	}
@@ -71,14 +77,20 @@ impl Barrel {
 	}
 }
 
-impl Hittable for Barrel {
-	fn bounding_circle(&self) -> BoundingCircle {
+impl Colideable for Barrel {
+	fn bounds(&self) -> BoundingCircle {
 		BoundingCircle {
 			position: self.position,
 			radius: 1.0,
 		}
 	}
 
+	fn position_mut(&mut self) -> &mut Vec2 {
+		&mut self.position
+	}
+}
+
+impl Hittable for Barrel {
 	fn hit(&mut self) {
 		self.health -= 1.0;
 	}
