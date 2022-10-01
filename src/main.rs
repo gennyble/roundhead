@@ -281,22 +281,27 @@ impl Game {
 	fn move_enemies(&mut self, delta: Duration) {
 		let mut moved = vec![];
 
-		let fix = |enemy: &mut Enemy, others: &[Enemy]| {
-			others.iter().for_each(|other| {
+		let fix = |enemy: &mut Enemy, others: &mut [Enemy]| -> bool {
+			let mut moved = false;
+			others.iter_mut().for_each(|other| {
 				let dist = enemy.position.distance_with(other.position);
 
 				if dist < enemy.bounding_circle().radius {
 					let dir = enemy.position - other.position;
-					/*println!(
-						"{} - {} - {}",
-						dir,
-						dir.normalize_correct(),
-						(dir.normalize_correct() * enemy.bounding_circle().radius).length()
-					);*/
-					let wanted = enemy.bounding_circle().radius;
-					enemy.position += dir.normalize_correct() * (wanted - dir.length());
+					//desired sepration
+					let wanted =
+						dir.normalize_correct() * (enemy.bounding_circle().radius - dir.length());
+
+					let collective_speed = enemy.speed + other.speed;
+
+					enemy.position +=
+						wanted * (collective_speed - (enemy.speed / collective_speed));
+					other.position -=
+						wanted * (collective_speed - (other.speed / collective_speed));
+					moved = true;
 				}
-			})
+			});
+			moved
 		};
 
 		loop {
@@ -307,15 +312,48 @@ impl Game {
 					let movement = direction * enemy.speed;
 					enemy.position += movement * delta.as_secs_f32();
 
-					fix(&mut enemy, &self.enemies);
-					fix(&mut enemy, &moved);
+					fix(&mut enemy, &mut self.enemies);
+					fix(&mut enemy, &mut moved);
 
 					moved.push(enemy);
 				}
 			}
 		}
 
-		self.enemies = moved;
+		// Try a max 5 times before giving up.
+		let mut iterations = 5;
+		'outer: loop {
+			self.enemies.extend(moved.drain(..));
+			println!("{iterations}");
+			if iterations == 0 {
+				println!("Max iterations");
+				return;
+			}
+			iterations -= 1;
+
+			let mut was_moved = false;
+			loop {
+				match self.enemies.pop() {
+					None => {
+						if !was_moved {
+							self.enemies = moved;
+							break 'outer;
+						}
+					}
+					Some(mut enemy) => {
+						if fix(&mut enemy, &mut self.enemies) {
+							was_moved = true;
+						}
+
+						if fix(&mut enemy, &mut moved) {
+							was_moved = true;
+						}
+
+						moved.push(enemy);
+					}
+				}
+			}
+		}
 	}
 }
 
