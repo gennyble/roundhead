@@ -10,13 +10,19 @@ const TURQUOISE: Color = Color::rgb(
 	0x88 as f32 / 256.0,
 );
 
+const PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
+
 fn main() {
-	let smitty = Smitten::new((640, 480), "Roundhead", 32);
+	let smitty = Smitten::new((1280, 960), "Roundhead", 64);
 
 	let mut game = Game {
 		smitten: smitty,
 		camera: Vec2::ZERO,
 		bullets: vec![],
+		enemies: vec![Enemy {
+			position: Vec2::new(5.0, 5.0),
+			color: PURPLE,
+		}],
 		last_render: Instant::now(),
 	};
 
@@ -49,7 +55,7 @@ fn main() {
 			movec += Vec2::new(1.0, 0.0);
 		}
 
-		movec = movec.normalize_correct() * (3.0 / 32.0);
+		movec = movec.normalize_correct() * (1.5 / 32.0);
 		game.camera += movec;
 
 		game.tick();
@@ -57,7 +63,6 @@ fn main() {
 		// Draw
 		game.smitten.clear();
 		game.draw();
-		game.rect((0f32, 0f32), (1f32, 1f32), TURQUOISE);
 		game.smitten.swap();
 	}
 }
@@ -67,6 +72,7 @@ struct Game {
 	smitten: Smitten,
 	camera: Vec2,
 	bullets: Vec<Bullet>,
+	enemies: Vec<Enemy>,
 	last_render: Instant,
 }
 
@@ -75,7 +81,7 @@ impl Game {
 	const BULLET_SPEED: f32 = 20.0;
 
 	pub fn rect<P: Into<Vec2>, D: Into<Vec2>, R: Into<Draw>>(&self, pos: P, dim: D, draw: R) {
-		self.smitten.rect(self.camera + pos.into(), dim, draw)
+		self.smitten.rect(pos.into() - self.camera, dim, draw)
 	}
 
 	pub fn draw(&self) {
@@ -86,6 +92,13 @@ impl Game {
 				color: Color::rgb(1.0, 0.0, 0.0),
 			})
 		}
+
+		for enemy in &self.enemies {
+			self.rect(enemy.position, (0.5f32, 0.5f32), enemy.color)
+		}
+
+		// Draw us. We're not affected by camera movement
+		self.smitten.rect((0f32, 0f32), (0.5f32, 0.5f32), TURQUOISE);
 	}
 
 	pub fn tick(&mut self) {
@@ -125,4 +138,9 @@ impl Bullet {
 			birth: Instant::now(),
 		}
 	}
+}
+
+struct Enemy {
+	position: Vec2,
+	color: Color,
 }
