@@ -41,6 +41,10 @@ impl Cooldown {
 			State::Ready => (),
 		}
 	}
+
+	pub fn percent(&self) -> f32 {
+		(self.cooldown.as_secs_f32() - self.waiting.as_secs_f32()) / self.cooldown.as_secs_f32()
+	}
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

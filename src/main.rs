@@ -70,6 +70,7 @@ fn main() {
 		health: 10.0,
 		barrels: vec![],
 		barrel_count: 5,
+		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
 	};
 
 	loop {
@@ -130,6 +131,7 @@ struct Game {
 	health: f32,
 	barrels: Vec<Barrel>,
 	barrel_count: usize,
+	wave_timer: Cooldown,
 }
 
 impl Game {
@@ -179,6 +181,12 @@ impl Game {
 		);
 
 		self.smitten.anchored_rect(
+			(HorizontalAnchor::Left, VerticalAnchor::Top),
+			(10.0 * (1.0 - self.wave_timer.percent()), 0.5),
+			Color::BLUE,
+		);
+
+		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
 			(10.0 * (self.health / Self::PLAYER_HEALTH_MAX), 0.75),
 			Color::rgb(0.75, 0.0, 0.0),
@@ -190,6 +198,21 @@ impl Game {
 		let delta = now.duration_since(self.last_render);
 		self.last_render = now;
 		let dsec = delta.as_secs_f64();
+
+		self.wave_timer.subtract(delta);
+		if self.wave_timer.is_ready() {
+			self.wave_timer.reset();
+			self.enemies.extend(
+				std::iter::repeat(Enemy {
+					position: Vec2::new(5.0, 5.0),
+					color: Color::YELLOW,
+					health: 5.0,
+					speed: 1.5,
+					cooldown: Cooldown::ready(Duration::from_secs(1)),
+				})
+				.take(5),
+			);
+		}
 
 		self.bullets = self
 			.bullets

@@ -49,7 +49,7 @@ impl Colideable for Enemy {
 
 impl Hittable for Enemy {
 	fn hit(&mut self) {
-		self.health = 0.0;
+		self.health -= 1.0;
 	}
 }
 
