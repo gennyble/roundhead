@@ -1,11 +1,17 @@
 #![feature(drain_filter)]
 
+mod util;
+
+use util::Cooldown;
+
 use std::{
 	ops::{Add, Mul, Sub},
 	time::{Duration, Instant},
 };
 
-use smitten::{Color, Draw, Key, SignedDistance, Smitten, SmittenEvent, Vec2};
+use smitten::{
+	Color, Draw, HorizontalAnchor, Key, SignedDistance, Smitten, SmittenEvent, Vec2, VerticalAnchor,
+};
 
 const TURQUOISE: Color = Color::rgb(
 	0x33 as f32 / 256.0,
@@ -19,6 +25,8 @@ const DIM: (u32, u32) = (1280, 960);
 fn main() {
 	let smitty = Smitten::new(DIM, "Roundhead", MUR);
 
+	let cooldown = Cooldown::ready(Duration::from_secs(1));
+
 	let mut game = Game {
 		smitten: smitty,
 		camera: Vec2::ZERO,
@@ -29,28 +37,33 @@ fn main() {
 				color: PURPLE,
 				health: 1.0,
 				speed: 1.25,
+				cooldown,
 			},
 			Enemy {
 				position: Vec2::new(5.0, 3.0),
 				color: Color::BLUE,
 				health: 1.0,
 				speed: 2.0,
+				cooldown,
 			},
 			Enemy {
 				position: Vec2::new(5.0, 3.0),
 				color: Color::BLUE,
 				health: 1.0,
 				speed: 2.2,
+				cooldown,
 			},
 			Enemy {
 				position: Vec2::new(5.0, 3.0),
 				color: Color::BLUE,
 				health: 1.0,
-				speed: 3.0,
+				speed: 1.0,
+				cooldown,
 			},
 		],
 		last_render: Instant::now(),
 		score: 0.0,
+		health: 10.0,
 		barrels: vec![],
 		barrel_count: 5,
 	};
@@ -110,6 +123,7 @@ struct Game {
 	enemies: Vec<Enemy>,
 	last_render: Instant,
 	score: f32,
+	health: f32,
 	barrels: Vec<Barrel>,
 	barrel_count: usize,
 }
@@ -121,6 +135,7 @@ impl Game {
 	const BULLET_WIDTH_MUR: f32 = Game::BULLET_WIDTH as f32 / MUR as f32;
 	const PLAYER_LENGTH: f32 = 0.75;
 	const PLAYER_DIM: Vec2 = Vec2::new(Game::PLAYER_LENGTH, Game::PLAYER_LENGTH);
+	const PLAYER_HEALTH_MAX: f32 = 10.0;
 
 	pub fn rect<P: Into<Vec2>, D: Into<Vec2>, R: Into<Draw>>(&self, pos: P, dim: D, draw: R) {
 		self.smitten.rect(pos.into() - self.camera, dim, draw)
@@ -151,6 +166,18 @@ impl Game {
 
 		// Draw us. We're not affected by camera movement
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
+
+		self.smitten.anchored_rect(
+			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
+			(10.0, 0.75),
+			Color::rgb(0.2, 0.2, 0.2),
+		);
+
+		self.smitten.anchored_rect(
+			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
+			(10.0 * (self.health / Self::PLAYER_HEALTH_MAX), 0.75),
+			Color::rgb(0.75, 0.0, 0.0),
+		)
 	}
 
 	pub fn tick(&mut self) {
@@ -170,7 +197,7 @@ impl Game {
 
 		let hits = Self::do_hits(&mut self.enemies, &mut self.bullets);
 		Self::burry_dead(&mut self.enemies);
-		self.move_enemies(delta);
+		self.tick_enemies(delta);
 
 		let barrel_hits = Self::do_hits(&mut self.barrels, &mut self.bullets);
 		Self::burry_dead(&mut self.barrels);
@@ -278,7 +305,21 @@ impl Game {
 		}
 	}
 
-	fn move_enemies(&mut self, delta: Duration) {
+	fn tick_enemies(&mut self, delta: Duration) {
+		for enemy in self.enemies.iter_mut() {
+			enemy.cooldown.subtract(delta);
+
+			if enemy.cooldown.is_ready() {
+				let dist = (enemy.position - self.camera).length();
+
+				if dist < Self::PLAYER_LENGTH {
+					enemy.cooldown.reset();
+					self.health -= 1.0;
+				}
+			}
+		}
+
+		//Movement
 		let mut moved = vec![];
 
 		let fix = |enemy: &mut Enemy, others: &mut [Enemy]| -> bool {
@@ -319,41 +360,7 @@ impl Game {
 				}
 			}
 		}
-
-		// Try a max 5 times before giving up.
-		let mut iterations = 5;
-		'outer: loop {
-			self.enemies.extend(moved.drain(..));
-			println!("{iterations}");
-			if iterations == 0 {
-				println!("Max iterations");
-				return;
-			}
-			iterations -= 1;
-
-			let mut was_moved = false;
-			loop {
-				match self.enemies.pop() {
-					None => {
-						if !was_moved {
-							self.enemies = moved;
-							break 'outer;
-						}
-					}
-					Some(mut enemy) => {
-						if fix(&mut enemy, &mut self.enemies) {
-							was_moved = true;
-						}
-
-						if fix(&mut enemy, &mut moved) {
-							was_moved = true;
-						}
-
-						moved.push(enemy);
-					}
-				}
-			}
-		}
+		self.enemies.extend(moved.drain(..));
 	}
 }
 
@@ -380,6 +387,7 @@ struct Enemy {
 	color: Color,
 	health: f32,
 	speed: f32,
+	cooldown: Cooldown,
 }
 
 impl Hittable for Enemy {
