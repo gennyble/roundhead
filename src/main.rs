@@ -179,17 +179,26 @@ impl Game {
 		}
 
 		for enemy in &self.enemies {
-			self.rect(enemy.position, Game::PLAYER_DIM, enemy.color)
+			//self.rect(enemy.position, Game::PLAYER_DIM, enemy.color)
+			self.smitten.sdf(SignedDistance::Circle {
+				center: enemy.position - self.player.position,
+				radius: (Game::PLAYER_LENGTH * MUR as f32 / 2.0).floor() as u32,
+				color: enemy.color,
+			})
 		}
 
 		// Draw us. We're not affected by player.position movement
 		self.smitten.sdf(SignedDistance::LineSegment {
 			start: Vec2::new(0.0, 0.0),
-			end: self.player.facing * 1.0,
+			end: self.player.facing * 0.5,
 			thickness: 2,
 			color: Color::BLACK,
 		});
-		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
+		self.smitten.sdf(SignedDistance::Circle {
+			center: Vec2::new(0.0, 0.0),
+			radius: (Game::PLAYER_LENGTH * MUR as f32 / 2.0).floor() as u32,
+			color: TURQUOISE,
+		});
 
 		self.draw_walls();
 		self.draw_ui();
@@ -254,7 +263,7 @@ impl Game {
 					position: Vec2::new(5.0, 5.0),
 					color: Color::YELLOW,
 					health: 25.0,
-					speed: 1.5,
+					speed: 0.5,
 					cooldown: Cooldown::ready(Duration::from_secs(1)),
 					should_move_next_frame: true,
 				})
