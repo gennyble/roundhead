@@ -18,11 +18,7 @@ use smitten::{
 	VerticalAnchor,
 };
 
-const TURQUOISE: Color = Color::rgb(
-	0x33 as f32 / 256.0,
-	0xaa as f32 / 256.0,
-	0x88 as f32 / 256.0,
-);
+const TURQUOISE: Color = Color::rgb8(0x33, 0xaa, 0x88);
 const PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
 const MUR: u32 = 48;
 const DIM: (u32, u32) = (1280, 960);
@@ -153,7 +149,7 @@ struct Game {
 
 impl Game {
 	const BULLET_LIFESPAN: Duration = Duration::from_secs(1);
-	const BULLET_SPEED: f32 = 20.0;
+	const BULLET_SPEED: f32 = 40.0;
 	const PLAYER_LENGTH: f32 = 0.75;
 	const PLAYER_DIM: Vec2 = Vec2::new(Game::PLAYER_LENGTH, Game::PLAYER_LENGTH);
 	const PLAYER_HEALTH_MAX: f32 = 10.0;
@@ -640,7 +636,7 @@ impl Weapon for Pistol {
 impl Default for Pistol {
 	fn default() -> Self {
 		Self {
-			cooldown: Cooldown::ready(Duration::from_secs_f32(0.4)),
+			cooldown: Cooldown::ready(Duration::from_secs_f32(0.35)),
 		}
 	}
 }
