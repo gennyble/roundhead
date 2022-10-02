@@ -76,7 +76,7 @@ fn main() {
 		score: 0.0,
 		health: 10.0,
 		barrels: vec![],
-		barrel_count: 5,
+		barrel_count: 100,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
 		font,
 	};
@@ -91,6 +91,10 @@ fn main() {
 			SmittenEvent::Keydown { key, .. } => {
 				if let Some(Key::E) = key {
 					game.place_barrel();
+				}
+
+				if let Some(Key::Space) = key {
+					game.shoot();
 				}
 			}
 			_ => (),
@@ -123,6 +127,9 @@ fn main() {
 
 		movec = movec.normalize_correct() * (1.5 / 32.0);
 		game.player.position += movec;
+		if movec != Vec2::ZERO {
+			game.player.facing = movec.normalize_correct();
+		}
 
 		game.tick();
 
@@ -186,6 +193,12 @@ impl Game {
 		}
 
 		// Draw us. We're not affected by player.position movement
+		self.smitten.sdf(SignedDistance::LineSegment {
+			start: Vec2::new(0.0, 0.0),
+			end: self.player.facing * 1.0,
+			thickness: 2,
+			color: Color::BLACK,
+		});
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
 
 		self.draw_walls();
@@ -264,8 +277,10 @@ impl Game {
 	}
 
 	pub fn shoot(&mut self) {
-		let direction = self.smitten.mouse_position().normalize_correct();
-		let bullet = Bullet::new(self.player.position, direction * Game::BULLET_SPEED);
+		let bullet = Bullet::new(
+			self.player.position,
+			self.player.facing * Game::BULLET_SPEED,
+		);
 		self.bullets.push(bullet);
 	}
 
@@ -274,7 +289,7 @@ impl Game {
 			return;
 		}
 
-		let direction = self.smitten.mouse_position_absolute().normalize_correct();
+		let direction = self.player.facing;
 
 		let place_direction = if direction.x.abs() > direction.y.abs() {
 			// It's horizontal
@@ -504,9 +519,10 @@ impl Game {
 	}
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Player {
 	position: Vec2,
+	facing: Vec2,
 }
 
 impl Colideable for Player {
@@ -519,6 +535,15 @@ impl Colideable for Player {
 
 	fn position_mut(&mut self) -> &mut Vec2 {
 		&mut self.position
+	}
+}
+
+impl Default for Player {
+	fn default() -> Self {
+		Self {
+			position: Default::default(),
+			facing: Vec2::new(0.0, 1.0),
+		}
 	}
 }
 
