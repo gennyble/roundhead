@@ -8,7 +8,7 @@ pub trait Colideable {
 }
 
 pub trait Hittable: Colideable {
-	fn hit(&mut self);
+	fn hit(&mut self, bullet: &Bullet);
 
 	fn was_hit(&self, bullet: &Bullet) -> bool {
 		let bounds = self.bounds();

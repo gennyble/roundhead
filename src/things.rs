@@ -13,14 +13,16 @@ pub struct Bullet {
 	pub position: Vec2,
 	pub velocity: Vec2,
 	pub birth: Instant,
+	pub damage: f32,
 }
 
 impl Bullet {
-	pub fn new(position: Vec2, velocity: Vec2) -> Self {
+	pub fn new(position: Vec2, velocity: Vec2, damage: f32) -> Self {
 		Self {
 			position,
 			velocity,
 			birth: Instant::now(),
+			damage,
 		}
 	}
 }
@@ -49,8 +51,8 @@ impl Colideable for Enemy {
 }
 
 impl Hittable for Enemy {
-	fn hit(&mut self) {
-		self.health -= 1.0;
+	fn hit(&mut self, bullet: &Bullet) {
+		self.health -= bullet.damage;
 	}
 }
 
@@ -92,8 +94,8 @@ impl Colideable for Barrel {
 }
 
 impl Hittable for Barrel {
-	fn hit(&mut self) {
-		self.health -= 1.0;
+	fn hit(&mut self, bullet: &Bullet) {
+		self.health -= bullet.damage;
 	}
 }
 

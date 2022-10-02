@@ -92,10 +92,6 @@ fn main() {
 				if let Some(Key::E) = key {
 					game.place_barrel();
 				}
-
-				if let Some(Key::Space) = key {
-					game.shoot();
-				}
 			}
 			_ => (),
 		});
@@ -104,7 +100,7 @@ fn main() {
 			break;
 		}
 
-		if game.smitten.is_key_down(Key::M) {
+		if game.smitten.is_key_down(Key::Space) {
 			game.shoot();
 		}
 
@@ -158,8 +154,6 @@ struct Game {
 impl Game {
 	const BULLET_LIFESPAN: Duration = Duration::from_secs(1);
 	const BULLET_SPEED: f32 = 20.0;
-	const BULLET_WIDTH: u32 = 4;
-	const BULLET_WIDTH_MUR: f32 = Game::BULLET_WIDTH as f32 / MUR as f32;
 	const PLAYER_LENGTH: f32 = 0.75;
 	const PLAYER_DIM: Vec2 = Vec2::new(Game::PLAYER_LENGTH, Game::PLAYER_LENGTH);
 	const PLAYER_HEALTH_MAX: f32 = 10.0;
@@ -263,7 +257,7 @@ impl Game {
 				std::iter::repeat(Enemy {
 					position: Vec2::new(5.0, 5.0),
 					color: Color::YELLOW,
-					health: 5.0,
+					health: 25.0,
 					speed: 1.5,
 					cooldown: Cooldown::ready(Duration::from_secs(1)),
 					should_move_next_frame: true,
@@ -285,6 +279,7 @@ impl Game {
 		self.barrels.iter().for_each(|barrel| {
 			colide_and_move(barrel, &mut self.player);
 		});
+		self.player.weapon.cooldown_mut().subtract(delta);
 
 		let hits = Self::do_bullet_hits(&mut self.enemies, &mut self.bullets);
 		Self::burry_dead(&mut self.enemies)
@@ -297,11 +292,16 @@ impl Game {
 	}
 
 	pub fn shoot(&mut self) {
-		let bullet = Bullet::new(
-			self.player.position,
-			self.player.facing * Game::BULLET_SPEED,
-		);
-		self.bullets.push(bullet);
+		if !self.player.weapon.is_ready() {
+			return;
+		}
+		self.player.weapon.cooldown_mut().reset();
+
+		for mut bull in self.player.weapon.bullets(self.player.facing) {
+			bull.position = self.player.position;
+
+			self.bullets.push(bull);
+		}
 	}
 
 	pub fn place_barrel(&mut self) {
@@ -360,7 +360,7 @@ impl Game {
 					}
 					Some(bullet) => {
 						if enemy.was_hit(&bullet) {
-							enemy.hit();
+							enemy.hit(&bullet);
 							bullets.extend(unhit_bullets);
 							continue 'enemy;
 						} else {
@@ -543,6 +543,7 @@ impl Game {
 struct Player {
 	position: Vec2,
 	facing: Vec2,
+	weapon: Box<dyn Weapon>,
 }
 
 impl Colideable for Player {
@@ -563,6 +564,7 @@ impl Default for Player {
 		Self {
 			position: Default::default(),
 			facing: Vec2::new(0.0, 1.0),
+			weapon: Box::new(Pistol::default()),
 		}
 	}
 }
@@ -606,4 +608,52 @@ fn colide_and_move<A: Colideable, B: Colideable>(a: &A, b: &mut B) -> bool {
 	} else {
 		false
 	}
+}
+
+#[derive(Debug)]
+struct Pistol {
+	cooldown: Cooldown,
+}
+
+impl Weapon for Pistol {
+	fn cooldown(&self) -> &Cooldown {
+		&self.cooldown
+	}
+
+	fn cooldown_mut(&mut self) -> &mut Cooldown {
+		&mut self.cooldown
+	}
+
+	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
+		vec![Bullet::new(
+			Vec2::ZERO,
+			direction * Game::BULLET_SPEED,
+			10.0,
+		)]
+	}
+
+	fn name(&self) -> &'static str {
+		"Pistol"
+	}
+}
+
+impl Default for Pistol {
+	fn default() -> Self {
+		Self {
+			cooldown: Cooldown::ready(Duration::from_secs_f32(0.25)),
+		}
+	}
+}
+
+trait Weapon: core::fmt::Debug {
+	fn is_ready(&self) -> bool {
+		self.cooldown().is_ready()
+	}
+
+	fn cooldown(&self) -> &Cooldown;
+	fn cooldown_mut(&mut self) -> &mut Cooldown;
+
+	fn bullets(&self, direction: Vec2) -> Vec<Bullet>;
+
+	fn name(&self) -> &'static str;
 }
