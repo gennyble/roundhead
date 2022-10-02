@@ -121,7 +121,7 @@ fn main() {
 			movec += Vec2::new(1.0, 0.0);
 		}
 
-		movec = movec.normalize_correct() * (1.5 / 32.0);
+		movec = movec.normalize_correct() * (1.25 / 32.0);
 		game.player.position += movec;
 		if movec != Vec2::ZERO {
 			game.player.facing = movec.normalize_correct();
@@ -640,7 +640,7 @@ impl Weapon for Pistol {
 impl Default for Pistol {
 	fn default() -> Self {
 		Self {
-			cooldown: Cooldown::ready(Duration::from_secs_f32(0.25)),
+			cooldown: Cooldown::ready(Duration::from_secs_f32(0.4)),
 		}
 	}
 }
