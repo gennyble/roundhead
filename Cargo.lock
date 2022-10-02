@@ -323,18 +323,11 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "fontdue"
 version = "0.7.2"
-source = "git+https://github.com/mooman219/fontdue#74257022c1d3fbbd6090e74c8e5fb693c22a64e9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a62391ecb864cf12ed06b2af4eda2e609b97657950d6a8f06841b17726ab253"
 dependencies = [
  "hashbrown",
  "ttf-parser",
-]
-
-[[package]]
-name = "fontster"
-version = "0.1.0"
-dependencies = [
- "fontdue",
- "thiserror",
 ]
 
 [[package]]
@@ -986,7 +979,7 @@ dependencies = [
 name = "smitten"
 version = "0.1.0"
 dependencies = [
- "fontster",
+ "fontdue",
  "glow",
  "glutin",
  "image",

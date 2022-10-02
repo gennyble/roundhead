@@ -71,8 +71,8 @@ impl Barrel {
 
 	pub fn damage_color(&self) -> Color {
 		crate::color_lerp(
-			Color::GREEN,
-			Color::RED,
+			Color::WHITE,
+			Color::BLACK,
 			self.health / Barrel::BARREL_HEALTH,
 		)
 	}

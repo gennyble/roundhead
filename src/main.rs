@@ -31,7 +31,8 @@ fn main() {
 	let mut smitty = Smitten::new(DIM, "Roundhead", MUR);
 
 	let cooldown = Cooldown::ready(Duration::from_secs(1));
-	let font = smitty.make_font("Hack-Regular.ttf");
+	let font = smitty.make_font("Cabin-Regular.ttf");
+	smitty.clear_color(Color::grey(0.5));
 
 	let mut game = Game {
 		smitten: smitty,
@@ -85,9 +86,6 @@ fn main() {
 
 		events.iter().for_each(|e| match e {
 			SmittenEvent::MouseDown { button } => {
-				let pos = game.smitten.mouse_position_absolute();
-				let angle = pos.normalize_correct().angle();
-				println!("{pos} - angle {angle}");
 				game.shoot();
 			}
 			SmittenEvent::Keydown { key, .. } => {
@@ -104,6 +102,10 @@ fn main() {
 
 		if game.smitten.is_key_down(Key::M) {
 			game.shoot();
+		}
+
+		if game.smitten.is_key_down(Key::P) {
+			game.score += 1.0;
 		}
 
 		let mut movec = Vec2::ZERO;
@@ -186,22 +188,30 @@ impl Game {
 		// Draw us. We're not affected by player.position movement
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
 
-		self.smitten.write(self.font, "TESTING!", (0.0, 0.0), 0.5);
+		self.draw_walls();
 
-		self.smitten.anchored_rect(
-			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
-			(10.0, 0.75),
-			Color::rgb(0.2, 0.2, 0.2),
+		self.smitten.write(
+			self.font,
+			&format!("{}", self.score),
+			(HorizontalAnchor::Center(0.0), VerticalAnchor::Top(-0.25)),
+			Color::BLACK,
+			1.0,
 		);
 
 		self.smitten.anchored_rect(
-			(HorizontalAnchor::Left, VerticalAnchor::Top),
+			(HorizontalAnchor::Left(0.0), VerticalAnchor::Top(0.0)),
 			(10.0 * (1.0 - self.wave_timer.percent()), 0.5),
 			Color::BLUE,
 		);
 
 		self.smitten.anchored_rect(
-			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
+			(HorizontalAnchor::Left(0.0), VerticalAnchor::Bottom(0.0)),
+			(10.0, 0.75),
+			Color::rgb(0.2, 0.2, 0.2),
+		);
+
+		self.smitten.anchored_rect(
+			(HorizontalAnchor::Left(0.0), VerticalAnchor::Bottom(0.0)),
 			(10.0 * (self.health / Self::PLAYER_HEALTH_MAX), 0.75),
 			Color::rgb(0.75, 0.0, 0.0),
 		)
@@ -238,8 +248,15 @@ impl Game {
 			.iter_mut()
 			.for_each(|bul| bul.position += bul.velocity * dsec as f32);
 
+		Self::collide_walls(&mut self.player);
+		self.barrels.iter().for_each(|barrel| {
+			colide_and_move(barrel, &mut self.player);
+		});
+
 		let hits = Self::do_bullet_hits(&mut self.enemies, &mut self.bullets);
-		Self::burry_dead(&mut self.enemies);
+		Self::burry_dead(&mut self.enemies)
+			.iter()
+			.for_each(|e| self.score += 123.0);
 		self.tick_enemies(delta);
 
 		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets);
@@ -327,9 +344,71 @@ impl Game {
 		dead
 	}
 
+	const ROOM_WIDTH: f32 = 40f32;
+	const ROOM_HEIGHT: f32 = 40f32;
+	const WALL_WIDTH: f32 = 1.0;
+
+	fn draw_walls(&self) {
+		let room_width = Self::ROOM_WIDTH;
+		let room_height = Self::ROOM_HEIGHT;
+
+		let hrw = room_width / 2.0;
+		let hrh = room_height / 2.0;
+
+		let walls = [
+			(
+				(-hrw, 0.0),
+				(Self::WALL_WIDTH, room_height + Self::WALL_WIDTH),
+			),
+			(
+				(hrw, 0.0),
+				(Self::WALL_WIDTH, room_height + Self::WALL_WIDTH),
+			),
+			(
+				(0.0, hrh),
+				(room_width + Self::WALL_WIDTH, Self::WALL_WIDTH),
+			),
+			(
+				(0.0, -hrh),
+				(room_width + Self::WALL_WIDTH, Self::WALL_WIDTH),
+			),
+		];
+
+		for (pos, dim) in walls {
+			self.rect(pos, dim, Color::BLACK)
+		}
+	}
+
+	fn collide_walls<C: Colideable>(thing: &mut C) {
+		let bounds = thing.bounds();
+		let p = bounds.position;
+		let r = bounds.radius;
+
+		let top = p.y + r;
+		let btm = p.y - r;
+		let lft = p.x - r;
+		let rht = p.x + r;
+
+		let hrw = Game::ROOM_WIDTH / 2.0;
+		let hrh = Game::ROOM_HEIGHT / 2.0;
+
+		let mpos = thing.position_mut();
+		if top > hrh {
+			mpos.y = hrh - r;
+		} else if btm < -hrh {
+			mpos.y = -hrh + r;
+		}
+
+		if lft < -hrw {
+			mpos.x = -hrw + r;
+		} else if rht > hrw {
+			mpos.x = hrw - r;
+		}
+	}
+
 	fn draw_grid(&self) {
-		let mur_width = (DIM.0 / MUR) + 3;
-		let mur_height = (DIM.1 / MUR) + 3;
+		let mur_width = (DIM.0 / MUR) + 4;
+		let mur_height = (DIM.1 / MUR) + 4;
 
 		for x in 0..mur_width {
 			for y in 0..mur_height {
@@ -339,11 +418,17 @@ impl Game {
 				let camera = self.player.position.operation(f32::fract);
 
 				let pos = Vec2::new(x.floor(), y.floor()) - camera;
-				self.smitten.sdf(SignedDistance::Circle {
+				/*self.smitten.sdf(SignedDistance::Circle {
 					center: pos,
 					radius: 4,
 					color: Color::grey(0.5),
-				});
+				});*/
+				let pixel_gap = (MUR as f32 - 1.0) / MUR as f32;
+				self.smitten.rect(
+					pos,
+					Vec2::new(pixel_gap, pixel_gap),
+					Color::rgb(0.95, 0.95, 0.85),
+				)
 			}
 		}
 	}
@@ -390,8 +475,8 @@ impl Game {
 						  /*other.position -=
 						  wanted * (collective_speed - (other.speed / collective_speed));*/
 
-					enemy.should_move_next_frame = false;
-					other.should_move_next_frame = false;
+					//enemy.should_move_next_frame = false;
+					//other.should_move_next_frame = false;
 					moved = true;
 				}
 			});
@@ -402,16 +487,14 @@ impl Game {
 			match self.enemies.pop() {
 				None => break,
 				Some(mut enemy) => {
-					//if !enemy.should_move_next_frame {
-					//	enemy.should_move_next_frame = true;
-					//} else {
+					Self::collide_walls(&mut enemy);
+
 					let direction = (self.player.position - enemy.position).normalize_correct();
 					let movement = direction * enemy.speed;
 					enemy.position += movement * delta.as_secs_f32();
 
 					fix(&mut enemy, &mut self.enemies);
 					fix(&mut enemy, &mut moved);
-					//}
 
 					moved.push(enemy);
 				}
