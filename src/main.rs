@@ -175,7 +175,7 @@ impl Game {
 		for bullet in &self.bullets {
 			self.smitten.sdf(SignedDistance::Circle {
 				center: bullet.position - self.player.position,
-				radius: 4,
+				radius: 2,
 				color: Color::rgb(1.0, 0.0, 0.0),
 			})
 		}
@@ -202,31 +202,51 @@ impl Game {
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
 
 		self.draw_walls();
+		self.draw_ui();
+	}
 
+	fn draw_ui(&self) {
 		self.smitten.write(
 			self.font,
 			&format!("{}", self.score),
-			(HorizontalAnchor::Center(0.0), VerticalAnchor::Top(-0.25)),
+			(HorizontalAnchor::Center(0.0), VerticalAnchor::Top(-0.75)),
 			Color::BLACK,
 			1.0,
 		);
 
 		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left(0.0), VerticalAnchor::Top(0.0)),
-			(10.0 * (1.0 - self.wave_timer.percent()), 0.5),
+			(DIM.0 as f32 / MUR as f32, 0.5),
+			Color::rgba(0.0, 0.0, 0.0, 0.2),
+		);
+
+		self.smitten.anchored_rect(
+			(HorizontalAnchor::Left(0.0), VerticalAnchor::Top(0.0)),
+			(
+				(DIM.0 as f32 / MUR as f32) * (1.0 - self.wave_timer.percent()),
+				0.5,
+			),
 			Color::BLUE,
 		);
 
-		self.smitten.anchored_rect(
-			(HorizontalAnchor::Left(0.0), VerticalAnchor::Bottom(0.0)),
-			(10.0, 0.75),
-			Color::rgb(0.2, 0.2, 0.2),
+		self.smitten.write(
+			self.font,
+			"PISTOL",
+			(0.0, VerticalAnchor::Bottom(1.0)),
+			Color::BLACK,
+			0.5,
 		);
 
+		self.smitten
+			.anchored_rect((0.0, 1.0), (2.0, 0.4), Color::rgba(0.0, 0.0, 0.0, 0.5));
+
 		self.smitten.anchored_rect(
-			(HorizontalAnchor::Left(0.0), VerticalAnchor::Bottom(0.0)),
-			(10.0 * (self.health / Self::PLAYER_HEALTH_MAX), 0.75),
-			Color::rgb(0.75, 0.0, 0.0),
+			(
+				-(Self::PLAYER_HEALTH_MAX - self.health) / Self::PLAYER_HEALTH_MAX,
+				1.0,
+			),
+			(1.8 * (self.health / Self::PLAYER_HEALTH_MAX), 0.2),
+			Color::rgb(0.0, 0.75, 0.0),
 		)
 	}
 
