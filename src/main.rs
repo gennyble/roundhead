@@ -31,7 +31,7 @@ fn main() {
 	let mut smitty = Smitten::new(DIM, "Roundhead", MUR);
 
 	let cooldown = Cooldown::ready(Duration::from_secs(1));
-	let font = smitty.make_font("Cabin-Regular.ttf");
+	let font = smitty.make_font("Hack-Regular.ttf");
 
 	let mut game = Game {
 		smitten: smitty,
@@ -44,6 +44,7 @@ fn main() {
 				health: 1.0,
 				speed: 1.25,
 				cooldown,
+				should_move_next_frame: true,
 			},
 			Enemy {
 				position: Vec2::new(5.0, 3.0),
@@ -51,6 +52,7 @@ fn main() {
 				health: 1.0,
 				speed: 2.0,
 				cooldown,
+				should_move_next_frame: true,
 			},
 			Enemy {
 				position: Vec2::new(5.0, 3.0),
@@ -58,6 +60,7 @@ fn main() {
 				health: 1.0,
 				speed: 2.2,
 				cooldown,
+				should_move_next_frame: true,
 			},
 			Enemy {
 				position: Vec2::new(5.0, 3.0),
@@ -65,6 +68,7 @@ fn main() {
 				health: 1.0,
 				speed: 1.0,
 				cooldown,
+				should_move_next_frame: true,
 			},
 		],
 		last_render: Instant::now(),
@@ -182,7 +186,7 @@ impl Game {
 		// Draw us. We're not affected by player.position movement
 		self.smitten.rect((0f32, 0f32), Game::PLAYER_DIM, TURQUOISE);
 
-		self.smitten.write(self.font, "Testing!", (0.0, 0.0));
+		self.smitten.write(self.font, "TESTING!", (0.0, 0.0), 0.5);
 
 		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left, VerticalAnchor::Bottom),
@@ -219,6 +223,7 @@ impl Game {
 					health: 5.0,
 					speed: 1.5,
 					cooldown: Cooldown::ready(Duration::from_secs(1)),
+					should_move_next_frame: true,
 				})
 				.take(5),
 			);
@@ -348,6 +353,7 @@ impl Game {
 			enemy.cooldown.subtract(delta);
 
 			if colide_and_move(&self.player, enemy) {
+				enemy.should_move_next_frame = false;
 				if enemy.cooldown.is_ready() {
 					enemy.cooldown.reset();
 					self.health -= 1.0;
@@ -355,6 +361,7 @@ impl Game {
 			}
 
 			for barrel in self.barrels.iter_mut() {
+				enemy.should_move_next_frame = false;
 				if colide_and_move(barrel, enemy) {
 					if enemy.cooldown.is_ready() {
 						enemy.cooldown.reset();
@@ -379,10 +386,12 @@ impl Game {
 
 					let collective_speed = enemy.speed + other.speed;
 
-					enemy.position +=
-						wanted * (collective_speed - (enemy.speed / collective_speed));
-					other.position -=
-						wanted * (collective_speed - (other.speed / collective_speed));
+					enemy.position += wanted; //* (collective_speed - (enemy.speed / collective_speed));
+						  /*other.position -=
+						  wanted * (collective_speed - (other.speed / collective_speed));*/
+
+					enemy.should_move_next_frame = false;
+					other.should_move_next_frame = false;
 					moved = true;
 				}
 			});
@@ -393,12 +402,16 @@ impl Game {
 			match self.enemies.pop() {
 				None => break,
 				Some(mut enemy) => {
+					//if !enemy.should_move_next_frame {
+					//	enemy.should_move_next_frame = true;
+					//} else {
 					let direction = (self.player.position - enemy.position).normalize_correct();
 					let movement = direction * enemy.speed;
 					enemy.position += movement * delta.as_secs_f32();
 
 					fix(&mut enemy, &mut self.enemies);
 					fix(&mut enemy, &mut moved);
+					//}
 
 					moved.push(enemy);
 				}

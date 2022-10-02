@@ -32,6 +32,7 @@ pub struct Enemy {
 	pub health: f32,
 	pub speed: f32,
 	pub cooldown: Cooldown,
+	pub should_move_next_frame: bool,
 }
 
 impl Colideable for Enemy {
