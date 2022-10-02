@@ -4,6 +4,7 @@ mod things;
 mod traits;
 mod util;
 
+use rand::{thread_rng, Rng};
 use things::{Barrel, Bullet, Enemy};
 use traits::{Colideable, Destructible, Hittable};
 use util::Cooldown;
@@ -255,21 +256,7 @@ impl Game {
 		self.last_render = now;
 		let dsec = delta.as_secs_f64();
 
-		self.wave_timer.subtract(delta);
-		if self.wave_timer.is_ready() {
-			self.wave_timer.reset();
-			self.enemies.extend(
-				std::iter::repeat(Enemy {
-					position: Vec2::new(5.0, 5.0),
-					color: Color::YELLOW,
-					health: 25.0,
-					speed: 0.5,
-					cooldown: Cooldown::ready(Duration::from_secs(1)),
-					should_move_next_frame: true,
-				})
-				.take(5),
-			);
-		}
+		self.wave_things(delta);
 
 		self.bullets = self
 			.bullets
@@ -541,6 +528,57 @@ impl Game {
 			}
 		}
 		self.enemies.extend(moved.drain(..));
+	}
+
+	const WAVE_SPAWN_AREA: f32 = 10.0;
+
+	fn wave_things(&mut self, delta: Duration) {
+		self.wave_timer.subtract(delta);
+		if self.wave_timer.is_ready() {
+			self.wave_timer.reset();
+
+			let room_dim = (Vec2::new(Game::ROOM_WIDTH, Game::ROOM_HEIGHT) / 2.0)
+				- (Vec2::new(Game::WAVE_SPAWN_AREA, Game::WAVE_SPAWN_AREA) / 2.0);
+
+			// Top-Right, Bottom-Right, Bottom-Left, Top-Left
+			let mut corners = vec![
+				room_dim,
+				room_dim.invert(false, true),
+				room_dim.invert(true, true),
+				room_dim.invert(true, false),
+			];
+
+			// What corner we don't want to spawn in.
+			corners.swap_remove(
+				match (self.player.position.x > 0.0, self.player.position.y > 0.0) {
+					(true, true) => 0,
+					(true, false) => 1,
+					(false, false) => 2,
+					(false, true) => 3,
+				},
+			);
+
+			let wave_spawn = corners[thread_rng().gen_range(0..corners.len())];
+
+			let randoms: Vec<Enemy> = std::iter::from_fn(move || {
+				Some((
+					thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
+					thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
+				))
+			})
+			.take(3)
+			.map(|position| Enemy {
+				position: Vec2::from(position) + wave_spawn,
+				color: Color::YELLOW,
+				health: 25.0,
+				speed: 0.5,
+				cooldown: Cooldown::ready(Duration::from_secs(2)),
+				should_move_next_frame: true,
+			})
+			.collect();
+
+			self.enemies.extend(randoms);
+		}
 	}
 }
 
