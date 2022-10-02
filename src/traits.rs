@@ -12,7 +12,7 @@ pub trait Hittable: Colideable {
 
 	fn was_hit(&self, bullet: &Bullet) -> bool {
 		let bounds = self.bounds();
-		bounds.position.distance_with(bullet.position) < bounds.radius
+		bounds.position.distance_with(bullet.position) < (bounds.radius / 2.0)
 	}
 }
 

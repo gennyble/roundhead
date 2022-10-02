@@ -35,43 +35,9 @@ fn main() {
 		smitten: smitty,
 		player: Player::default(),
 		bullets: vec![],
-		enemies: vec![
-			Enemy {
-				position: Vec2::new(5.0, 5.0),
-				color: PURPLE,
-				health: 1.0,
-				speed: 1.25,
-				cooldown,
-				should_move_next_frame: true,
-			},
-			Enemy {
-				position: Vec2::new(5.0, 3.0),
-				color: Color::BLUE,
-				health: 1.0,
-				speed: 2.0,
-				cooldown,
-				should_move_next_frame: true,
-			},
-			Enemy {
-				position: Vec2::new(5.0, 3.0),
-				color: Color::BLUE,
-				health: 1.0,
-				speed: 2.2,
-				cooldown,
-				should_move_next_frame: true,
-			},
-			Enemy {
-				position: Vec2::new(5.0, 3.0),
-				color: Color::BLUE,
-				health: 1.0,
-				speed: 1.0,
-				cooldown,
-				should_move_next_frame: true,
-			},
-		],
+		enemies: vec![],
 		last_render: Instant::now(),
 		score: 0.0,
-		health: 10.0,
 		barrels: vec![],
 		barrel_count: 100,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
@@ -141,7 +107,6 @@ struct Game {
 	enemies: Vec<Enemy>,
 	last_render: Instant,
 	score: f32,
-	health: f32,
 	barrels: Vec<Barrel>,
 	barrel_count: usize,
 	wave_timer: Cooldown,
@@ -153,7 +118,7 @@ impl Game {
 	const BULLET_SPEED: f32 = 40.0;
 	const PLAYER_LENGTH: f32 = 0.75;
 	const PLAYER_DIM: Vec2 = Vec2::new(Game::PLAYER_LENGTH, Game::PLAYER_LENGTH);
-	const PLAYER_HEALTH_MAX: f32 = 10.0;
+	const PLAYER_HEALTH_MAX: f32 = 30.0;
 
 	pub fn rect<P: Into<Vec2>, D: Into<Vec2>, R: Into<Draw>>(&self, pos: P, dim: D, draw: R) {
 		self.smitten
@@ -242,10 +207,10 @@ impl Game {
 
 		self.smitten.anchored_rect(
 			(
-				-(Self::PLAYER_HEALTH_MAX - self.health) / Self::PLAYER_HEALTH_MAX,
+				-(Self::PLAYER_HEALTH_MAX - self.player.health) / Self::PLAYER_HEALTH_MAX,
 				1.0,
 			),
-			(1.8 * (self.health / Self::PLAYER_HEALTH_MAX), 0.2),
+			(1.8 * (self.player.health / Self::PLAYER_HEALTH_MAX), 0.2),
 			Color::rgb(0.0, 0.75, 0.0),
 		)
 	}
@@ -468,7 +433,7 @@ impl Game {
 				enemy.should_move_next_frame = false;
 				if enemy.cooldown.is_ready() {
 					enemy.cooldown.reset();
-					self.health -= 1.0;
+					self.player.health -= 6.66;
 				}
 			}
 
@@ -477,7 +442,7 @@ impl Game {
 				if colide_and_move(barrel, enemy) {
 					if enemy.cooldown.is_ready() {
 						enemy.cooldown.reset();
-						barrel.health -= 1.0;
+						barrel.health -= 6.66;
 					}
 				}
 			}
@@ -530,7 +495,7 @@ impl Game {
 		self.enemies.extend(moved.drain(..));
 	}
 
-	const WAVE_SPAWN_AREA: f32 = 10.0;
+	const WAVE_SPAWN_AREA: f32 = 5.0;
 
 	fn wave_things(&mut self, delta: Duration) {
 		self.wave_timer.subtract(delta);
@@ -586,6 +551,7 @@ impl Game {
 struct Player {
 	position: Vec2,
 	facing: Vec2,
+	health: f32,
 	weapon: Box<dyn Weapon>,
 }
 
@@ -607,6 +573,7 @@ impl Default for Player {
 		Self {
 			position: Default::default(),
 			facing: Vec2::new(0.0, 1.0),
+			health: Game::PLAYER_HEALTH_MAX,
 			weapon: Box::new(Pistol::default()),
 		}
 	}
@@ -668,9 +635,12 @@ impl Weapon for Pistol {
 	}
 
 	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
+		let direction = direction.angle() + thread_rng().gen_range(-5.0..5.0);
+		println!("{direction}");
+
 		vec![Bullet::new(
 			Vec2::ZERO,
-			direction * Game::BULLET_SPEED,
+			Vec2::from_degrees(direction) * Game::BULLET_SPEED,
 			10.0,
 		)]
 	}

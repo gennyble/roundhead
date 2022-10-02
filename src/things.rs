@@ -69,7 +69,7 @@ pub struct Barrel {
 }
 
 impl Barrel {
-	pub const BARREL_HEALTH: f32 = 10.0;
+	pub const BARREL_HEALTH: f32 = 100.0;
 
 	pub fn damage_color(&self) -> Color {
 		crate::color_lerp(
