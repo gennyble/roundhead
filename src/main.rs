@@ -306,7 +306,23 @@ impl Game {
 			),
 			(1.8 * (self.player.health / Self::PLAYER_HEALTH_MAX), 0.2),
 			Color::rgb(0.0, 0.75, 0.0),
-		)
+		);
+
+		if self.player.health <= 0.0 {
+			self.smitten.anchored_rect(
+				(0.0, 0.0),
+				(DIM.0 as f32 / MUR as f32, 2.0),
+				Color::rgba(0.0, 0.0, 0.0, 0.5),
+			);
+
+			self.smitten.write(
+				self.font,
+				String::from("You died!"),
+				(0.0, VerticalAnchor::Center(0.0)),
+				Color::rgb(0.6, 0.0, 0.0),
+				1.5,
+			);
+		}
 	}
 
 	fn write_messages(&self) {
@@ -330,6 +346,10 @@ impl Game {
 		self.last_render = now;
 		let dsec = delta.as_secs_f64();
 
+		if self.player.health <= 0.0 {
+			return;
+		}
+
 		self.wave_things(delta);
 
 		self.bullets = self
@@ -348,13 +368,17 @@ impl Game {
 		self.player.tick(delta);
 		self.check_pickups();
 
-		let hits = Self::do_bullet_hits(&mut self.enemies, &mut self.bullets);
+		let hits = Self::do_bullet_hits(
+			&mut self.enemies,
+			&mut self.bullets,
+			Some(self.player.position),
+		);
 		Self::burry_dead(&mut self.enemies)
 			.into_iter()
 			.for_each(|e| self.enemy_killed(e));
 		self.tick_enemies(delta);
 
-		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets);
+		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
 		Self::burry_dead(&mut self.barrels);
 
 		// Messages
@@ -492,7 +516,11 @@ impl Game {
 			.is_some()
 	}
 
-	fn do_bullet_hits<H: Hittable>(hittables: &mut Vec<H>, bullets: &mut Vec<Bullet>) {
+	fn do_bullet_hits<H: Hittable + Colideable>(
+		hittables: &mut Vec<H>,
+		bullets: &mut Vec<Bullet>,
+		player_position: Option<Vec2>,
+	) {
 		'enemy: for enemy in hittables.iter_mut() {
 			let mut unhit_bullets = vec![];
 
@@ -506,6 +534,13 @@ impl Game {
 						if enemy.was_hit(&bullet) {
 							enemy.hit(&bullet);
 							bullets.extend(unhit_bullets);
+
+							if let Some(pos) = player_position {
+								let dir = (enemy.bounds().position - pos).normalize_correct();
+								let pushback = dir * (enemy.bounds().radius / 2.0);
+								*enemy.position_mut() = enemy.bounds().position + pushback;
+							}
+
 							continue 'enemy;
 						} else {
 							unhit_bullets.push(bullet);
