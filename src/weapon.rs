@@ -153,3 +153,59 @@ impl Default for Uzi {
 		}
 	}
 }
+
+#[derive(Debug)]
+pub struct Shotgun {
+	cooldown: Cooldown,
+	ammo: Ammunition,
+}
+
+impl Weapon for Shotgun {
+	fn ammo(&self) -> &Ammunition {
+		&self.ammo
+	}
+
+	fn ammo_mut(&mut self) -> &mut Ammunition {
+		&mut self.ammo
+	}
+
+	fn cooldown(&self) -> &Cooldown {
+		&self.cooldown
+	}
+
+	fn cooldown_mut(&mut self) -> &mut Cooldown {
+		&mut self.cooldown
+	}
+
+	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
+		let mut inaccuracy = 1.5;
+		std::iter::repeat_with(|| {
+			let direction = direction.angle() + thread_rng().gen_range(-inaccuracy..inaccuracy);
+			inaccuracy += 4.25;
+
+			Bullet::new(
+				Vec2::ZERO,
+				Vec2::from_degrees(direction) * crate::Game::BULLET_SPEED,
+				15.0,
+			)
+		})
+		.take(3)
+		.collect()
+	}
+
+	fn name(&self) -> &'static str {
+		"Shotgun"
+	}
+}
+
+impl Default for Shotgun {
+	fn default() -> Self {
+		Self {
+			cooldown: Cooldown::ready(Duration::from_secs_f32(1.0)),
+			ammo: Ammunition::Limited {
+				capacity: 10,
+				rounds: 0,
+			},
+		}
+	}
+}

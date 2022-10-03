@@ -16,6 +16,14 @@ impl Cooldown {
 		}
 	}
 
+	pub fn waiting(cooldown: Duration) -> Self {
+		Self {
+			cooldown,
+			waiting: cooldown,
+			state: State::Waiting,
+		}
+	}
+
 	pub fn is_ready(&self) -> bool {
 		match self.state {
 			State::Ready => true,

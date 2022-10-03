@@ -9,9 +9,10 @@ use rand::{thread_rng, Rng};
 use things::{Barrel, Bullet, Enemy, Pickup};
 use traits::{Colideable, Destructible, Hittable};
 use util::Cooldown;
-use weapon::{Ammunition, Pistol, Uzi, Weapon};
+use weapon::{Ammunition, Pistol, Shotgun, Uzi, Weapon};
 
 use std::{
+	collections::VecDeque,
 	ops::{Add, Mul, Sub},
 	time::{Duration, Instant},
 };
@@ -49,7 +50,8 @@ fn main() {
 			.into_iter()
 			.map(|position| Pickup { position })
 			.collect(),
-		possible_pickups: vec![AmmoPickup::Uzi],
+		possible_pickups: vec![AmmoPickup::Uzi, AmmoPickup::Shotgun],
+		messages: VecDeque::with_capacity(10),
 	};
 
 	loop {
@@ -70,6 +72,9 @@ fn main() {
 				}
 				Some(Key::Row2) => {
 					game.player.select_weapon(1);
+				}
+				Some(Key::Row3) => {
+					game.player.select_weapon(2);
 				}
 				_ => (),
 			},
@@ -131,6 +136,7 @@ struct Game {
 	font: FontId,
 	pickups: Vec<Pickup>,
 	possible_pickups: Vec<AmmoPickup>,
+	messages: VecDeque<Alert>,
 }
 
 impl Game {
@@ -194,6 +200,8 @@ impl Game {
 		self.draw_ui();
 	}
 
+	const WAVE_TIMER_HEIGHT: f32 = 0.5;
+
 	fn draw_ui(&self) {
 		self.smitten.write(
 			self.font,
@@ -203,21 +211,36 @@ impl Game {
 			1.0,
 		);
 
+		// Wave timer
 		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left(0.0), VerticalAnchor::Top(0.0)),
-			(DIM.0 as f32 / MUR as f32, 0.5),
-			Color::rgba(0.0, 0.0, 0.0, 0.2),
+			(DIM.0 as f32 / MUR as f32, Game::WAVE_TIMER_HEIGHT),
+			Color::rgba(0.0, 0.0, 0.0, 0.3),
 		);
 
 		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left(0.0), VerticalAnchor::Top(0.0)),
 			(
 				(DIM.0 as f32 / MUR as f32) * (1.0 - self.wave_timer.percent()),
-				0.5,
+				Game::WAVE_TIMER_HEIGHT,
 			),
 			Color::BLUE,
 		);
 
+		// Message box
+		if !self.messages.is_empty() {
+			self.smitten.anchored_rect(
+				(
+					HorizontalAnchor::Right(0.0),
+					VerticalAnchor::Top(-Game::WAVE_TIMER_HEIGHT),
+				),
+				(5.0, self.messages.len() as f32 / 1.5 + 0.25),
+				Color::rgba(0.0, 0.0, 0.0, 0.3),
+			);
+			self.write_messages();
+		}
+
+		// Weapon details
 		self.smitten.write(
 			self.font,
 			self.player.weapon().name(),
@@ -236,6 +259,7 @@ impl Game {
 			);
 		}
 
+		// Health
 		self.smitten
 			.anchored_rect((0.0, 1.0), (2.0, 0.4), Color::rgba(0.0, 0.0, 0.0, 0.5));
 
@@ -247,6 +271,21 @@ impl Game {
 			(1.8 * (self.player.health / Self::PLAYER_HEALTH_MAX), 0.2),
 			Color::rgb(0.0, 0.75, 0.0),
 		)
+	}
+
+	fn write_messages(&self) {
+		for (idx, msg) in self.messages.iter().enumerate() {
+			self.smitten.write(
+				self.font,
+				&msg.message,
+				(
+					HorizontalAnchor::Right(0.0),
+					VerticalAnchor::Top(-Game::WAVE_TIMER_HEIGHT - idx as f32 / 1.5),
+				),
+				msg.color(),
+				0.5,
+			)
+		}
 	}
 
 	pub fn tick(&mut self) {
@@ -281,6 +320,12 @@ impl Game {
 
 		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets);
 		Self::burry_dead(&mut self.barrels);
+
+		// Messages
+		self.messages.retain_mut(|a| {
+			a.lifetime.subtract(delta);
+			!a.lifetime.is_ready()
+		});
 	}
 
 	pub fn shoot(&mut self) {
@@ -619,17 +664,27 @@ impl Game {
 	fn check_pickups(&mut self) {
 		let mut checked = vec![];
 
-		for pickup in self.pickups.drain(..) {
+		let unchecked: Vec<Pickup> = self.pickups.drain(..).collect();
+		for pickup in unchecked {
 			if pickup.colides_with(&self.player) {
 				let r: usize = thread_rng().gen_range(0..self.possible_pickups.len());
 				let pickup = self.possible_pickups[r];
 				self.player.pickedup(pickup);
+				self.push_alert(Alert::new(format!("{}", pickup)));
 			} else {
 				checked.push(pickup);
 			}
 		}
 
 		self.pickups.extend(checked);
+	}
+
+	fn push_alert(&mut self, alert: Alert) {
+		self.messages.push_back(alert);
+
+		if self.messages.len() > 10 {
+			self.messages.pop_front();
+		}
 	}
 }
 
@@ -692,6 +747,7 @@ impl Player {
 	pub fn pickedup(&mut self, pickedup: AmmoPickup) {
 		let weapon_index = match pickedup {
 			AmmoPickup::Uzi => 1,
+			AmmoPickup::Shotgun => 2,
 		};
 
 		self.weapons[weapon_index].ammo_mut().reload();
@@ -717,7 +773,11 @@ impl Default for Player {
 			position: Default::default(),
 			facing: Vec2::new(0.0, 1.0),
 			health: Game::PLAYER_HEALTH_MAX,
-			weapons: vec![Box::new(Pistol::default()), Box::new(Uzi::default())],
+			weapons: vec![
+				Box::new(Pistol::default()),
+				Box::new(Uzi::default()),
+				Box::new(Shotgun::default()),
+			],
 			selected_weapon: 0,
 		}
 	}
@@ -767,4 +827,39 @@ fn colide_and_move<A: Colideable, B: Colideable>(a: &A, b: &mut B) -> bool {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum AmmoPickup {
 	Uzi,
+	Shotgun,
+}
+
+#[derive(Clone, Debug)]
+struct Alert {
+	message: String,
+	lifetime: Cooldown,
+}
+
+impl Alert {
+	pub fn new(message: String) -> Self {
+		Self {
+			message,
+			lifetime: Cooldown::waiting(Duration::from_secs(3)),
+		}
+	}
+
+	pub fn color(&self) -> Color {
+		let a = self.lifetime.percent();
+		// I'm sure this is mathable I just don't know how to do it
+		let a = if a > 0.66 { (1.0 - a) * 3.0 } else { 1.0 };
+
+		Color::rgba(1.0, 1.0, 1.0, a)
+	}
+}
+
+impl std::fmt::Display for AmmoPickup {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let stat = match self {
+			AmmoPickup::Uzi => "uzi ammo",
+			AmmoPickup::Shotgun => "shotgun ammo",
+		};
+
+		write!(f, "{}", stat)
+	}
 }
