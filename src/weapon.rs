@@ -248,3 +248,57 @@ impl Default for Shotgun {
 		}
 	}
 }
+
+#[derive(Debug)]
+pub struct Wall {
+	cooldown: Cooldown,
+	ammo: Ammunition,
+	damage: f32,
+}
+
+impl Weapon for Wall {
+	fn ammo(&self) -> &Ammunition {
+		&self.ammo
+	}
+
+	fn ammo_mut(&mut self) -> &mut Ammunition {
+		&mut self.ammo
+	}
+
+	fn damage(&self) -> f32 {
+		self.damage
+	}
+
+	fn damage_mut(&mut self) -> &mut f32 {
+		&mut self.damage
+	}
+
+	fn cooldown(&self) -> &Cooldown {
+		&self.cooldown
+	}
+
+	fn cooldown_mut(&mut self) -> &mut Cooldown {
+		&mut self.cooldown
+	}
+
+	fn bullets(&self, _direction: Vec2) -> Vec<Bullet> {
+		unreachable!("Called bullets on wall")
+	}
+
+	fn name(&self) -> &'static str {
+		"Wall"
+	}
+}
+
+impl Default for Wall {
+	fn default() -> Self {
+		Self {
+			cooldown: Cooldown::ready(Duration::from_secs_f32(0.25)),
+			ammo: Ammunition::Limited {
+				capacity: 5,
+				rounds: 0,
+			},
+			damage: 7.5,
+		}
+	}
+}

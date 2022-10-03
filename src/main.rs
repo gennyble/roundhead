@@ -9,7 +9,7 @@ use rand::{thread_rng, Rng};
 use things::{Barrel, Bullet, Enemy, Pickup};
 use traits::{Colideable, Destructible, Hittable};
 use util::Cooldown;
-use weapon::{Ammunition, Pistol, Shotgun, Uzi, Weapon};
+use weapon::{Ammunition, Pistol, Shotgun, Uzi, Wall, Weapon};
 
 use std::{
 	collections::VecDeque,
@@ -63,11 +63,6 @@ fn main() {
 			SmittenEvent::MouseDown { button } => {
 				game.shoot();
 			}
-			SmittenEvent::Keydown { key, .. } => {
-				if let Some(Key::E) = key {
-					game.place_barrel();
-				}
-			}
 			SmittenEvent::Keyup { key, .. } => match key {
 				Some(Key::Row1) => {
 					game.player.select_weapon(0);
@@ -77,6 +72,9 @@ fn main() {
 				}
 				Some(Key::Row3) => {
 					game.player.select_weapon(2);
+				}
+				Some(Key::Row4) => {
+					game.player.select_weapon(3);
 				}
 				_ => (),
 			},
@@ -388,6 +386,12 @@ impl Game {
 				};
 			}
 
+			macro_rules! double_ammo {
+				($index:literal) => {
+					self.player.weapons[$index].ammo_mut().scale_magazine(2.0)
+				};
+			}
+
 			macro_rules! double_damage {
 				($index:literal) => {
 					*self.player.weapons[$index].damage_mut() *= 2.0
@@ -407,6 +411,9 @@ impl Game {
 				UpgradeType::PistolDouble => double_damage!(0),
 				UpgradeType::ShotgunUnlock => unlock!(2 AmmoPickup::Shotgun),
 				UpgradeType::UziFast => cut_cooldown!(1),
+				UpgradeType::WallUnlock => unlock!(3 AmmoPickup::Wall),
+				UpgradeType::UziDoubleAmmo => double_ammo!(1),
+				UpgradeType::ShotgunFast => cut_cooldown!(2),
 			}
 		}
 	}
@@ -416,17 +423,22 @@ impl Game {
 			return;
 		}
 		self.player.weapon_mut().cooldown_mut().reset();
+
+		if self.player.selected_weapon != 3 {
+			for mut bull in self.player.weapon().bullets(self.player.facing) {
+				bull.position = self.player.position;
+
+				self.bullets.push(bull);
+			}
+		} else {
+			self.place_barrel();
+		}
+
 		self.player.weapon_mut().ammo_mut().decrement();
 
 		// Switch back to the pistol if the current weapon just ran out of ammo
 		if self.player.weapon().ammo().is_empty() {
 			self.player.select_weapon(0);
-		}
-
-		for mut bull in self.player.weapon().bullets(self.player.facing) {
-			bull.position = self.player.position;
-
-			self.bullets.push(bull);
 		}
 	}
 
@@ -507,14 +519,15 @@ impl Game {
 
 	const ROOM_WIDTH: f32 = 40f32;
 	const ROOM_HEIGHT: f32 = 40f32;
-	const WALL_WIDTH: f32 = 1.0;
+	const WALL_WIDTH: f32 = 50.0;
 
 	fn draw_walls(&self) {
 		let room_width = Self::ROOM_WIDTH;
 		let room_height = Self::ROOM_HEIGHT;
 
-		let hrw = room_width / 2.0;
-		let hrh = room_height / 2.0;
+		let hww = Game::WALL_WIDTH / 2.0;
+		let hrw = (room_width / 2.0) + hww - 0.5;
+		let hrh = (room_height / 2.0) + hww - 0.5;
 
 		let walls = [
 			(
@@ -536,7 +549,7 @@ impl Game {
 		];
 
 		for (pos, dim) in walls {
-			self.rect(pos, dim, Color::WHITE)
+			self.rect(pos, dim, Color::grey(0.5))
 		}
 	}
 
@@ -849,6 +862,7 @@ impl Player {
 		let weapon_index = match pickedup {
 			AmmoPickup::Uzi => 1,
 			AmmoPickup::Shotgun => 2,
+			AmmoPickup::Wall => 3,
 		};
 
 		self.weapons[weapon_index].ammo_mut().reload();
@@ -878,6 +892,7 @@ impl Default for Player {
 				Box::new(Pistol::default()),
 				Box::new(Uzi::default()),
 				Box::new(Shotgun::default()),
+				Box::new(Wall::default()),
 			],
 			selected_weapon: 0,
 		}
@@ -929,6 +944,7 @@ fn colide_and_move<A: Colideable, B: Colideable>(a: &A, b: &mut B) -> bool {
 enum AmmoPickup {
 	Uzi,
 	Shotgun,
+	Wall,
 }
 
 #[derive(Clone, Debug)]
@@ -968,6 +984,7 @@ impl std::fmt::Display for AmmoPickup {
 		let stat = match self {
 			AmmoPickup::Uzi => "uzi ammo",
 			AmmoPickup::Shotgun => "shotgun ammo",
+			AmmoPickup::Wall => "wall ammo",
 		};
 
 		write!(f, "{}", stat)
@@ -988,16 +1005,16 @@ impl Upgrade {
 		let mut ret = VecDeque::new();
 
 		macro_rules! upgrade {
-			($score:literal $kind:expr) => {
+			($score:literal $kind:path) => {
 				ret.push_back(Upgrade::new($score as f32, $kind));
 			};
 
-			($score:literal $kind:expr, $score2:literal $kind2:expr) => {
+			($score:literal $kind:path, $score2:literal $kind2:path) => {
 				upgrade!($score $kind);
 				upgrade!($score2 $kind2);
 			};
 
-			($score:literal $kind:expr, $score2:literal $kind2:expr, $($scores:literal $kinds:expr),+) => {
+			($score:literal $kind:path, $score2:literal $kind2:path, $($scores:literal $kinds:path),+) => {
 				upgrade!($score $kind);
 				upgrade!($score2 $kind2, $($scores $kinds),+);
 			}
@@ -1008,7 +1025,10 @@ impl Upgrade {
 			900 UpgradeType::UziUnlock,
 			1700 UpgradeType::PistolDouble,
 			2600 UpgradeType::ShotgunUnlock,
-			3500 UpgradeType::UziFast
+			3500 UpgradeType::UziFast,
+			4100 UpgradeType::WallUnlock,
+			4700 UpgradeType::UziDoubleAmmo,
+			5200 UpgradeType::ShotgunFast
 		);
 
 		ret
@@ -1021,6 +1041,9 @@ enum UpgradeType {
 	PistolDouble,
 	ShotgunUnlock,
 	UziFast,
+	WallUnlock,
+	UziDoubleAmmo,
+	ShotgunFast,
 }
 
 impl std::fmt::Display for UpgradeType {
@@ -1031,6 +1054,9 @@ impl std::fmt::Display for UpgradeType {
 			UpgradeType::PistolDouble => "pistol double damge",
 			UpgradeType::ShotgunUnlock => "shotgun unlocked",
 			UpgradeType::UziFast => "uzi rapid fire",
+			UpgradeType::WallUnlock => "wallls unlocked",
+			UpgradeType::UziDoubleAmmo => "uzi double ammo",
+			UpgradeType::ShotgunFast => "shotgun fast fire",
 		};
 
 		write!(f, "{}", stat)
