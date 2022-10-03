@@ -667,10 +667,12 @@ impl Game {
 		let unchecked: Vec<Pickup> = self.pickups.drain(..).collect();
 		for pickup in unchecked {
 			if pickup.colides_with(&self.player) {
-				let r: usize = thread_rng().gen_range(0..self.possible_pickups.len());
-				let pickup = self.possible_pickups[r];
-				self.player.pickedup(pickup);
-				self.push_alert(Alert::new(format!("{}", pickup)));
+				if self.possible_pickups.len() > 0 {
+					let r: usize = thread_rng().gen_range(0..self.possible_pickups.len());
+					let pickup = self.possible_pickups[r];
+					self.player.pickedup(pickup);
+					self.push_alert(Alert::new(format!("{}", pickup)));
+				}
 			} else {
 				checked.push(pickup);
 			}
@@ -834,13 +836,19 @@ enum AmmoPickup {
 struct Alert {
 	message: String,
 	lifetime: Cooldown,
+	color: Color,
 }
 
 impl Alert {
 	pub fn new(message: String) -> Self {
+		Self::with_color(message, Color::WHITE)
+	}
+
+	pub fn with_color(message: String, color: Color) -> Alert {
 		Self {
 			message,
 			lifetime: Cooldown::waiting(Duration::from_secs(3)),
+			color,
 		}
 	}
 
@@ -849,7 +857,10 @@ impl Alert {
 		// I'm sure this is mathable I just don't know how to do it
 		let a = if a > 0.66 { (1.0 - a) * 3.0 } else { 1.0 };
 
-		Color::rgba(1.0, 1.0, 1.0, a)
+		let mut c = self.color;
+		let a = lerp(c.a, 0.0, 1.0 - a);
+		c.a = a;
+		c
 	}
 }
 
