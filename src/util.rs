@@ -2,7 +2,7 @@ use std::time::Duration;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Cooldown {
-	cooldown: Duration,
+	pub cooldown: Duration,
 	waiting: Duration,
 	state: State,
 }

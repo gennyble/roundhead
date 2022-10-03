@@ -13,6 +13,9 @@ pub trait Weapon: core::fmt::Debug {
 	fn ammo(&self) -> &Ammunition;
 	fn ammo_mut(&mut self) -> &mut Ammunition;
 
+	fn damage(&self) -> f32;
+	fn damage_mut(&mut self) -> &mut f32;
+
 	fn cooldown(&self) -> &Cooldown;
 	fn cooldown_mut(&mut self) -> &mut Cooldown;
 
@@ -55,12 +58,19 @@ impl Ammunition {
 			*rounds = *capacity;
 		}
 	}
+
+	pub fn scale_magazine(&mut self, scalar: f32) {
+		if let Self::Limited { capacity, rounds } = self {
+			*capacity = (*capacity as f32 * scalar).round() as u32;
+		}
+	}
 }
 
 #[derive(Debug)]
 pub struct Pistol {
 	cooldown: Cooldown,
 	ammo: Ammunition,
+	damage: f32,
 }
 
 impl Weapon for Pistol {
@@ -72,6 +82,14 @@ impl Weapon for Pistol {
 		&mut self.ammo
 	}
 
+	fn damage(&self) -> f32 {
+		self.damage
+	}
+
+	fn damage_mut(&mut self) -> &mut f32 {
+		&mut self.damage
+	}
+
 	fn cooldown(&self) -> &Cooldown {
 		&self.cooldown
 	}
@@ -86,7 +104,7 @@ impl Weapon for Pistol {
 		vec![Bullet::new(
 			Vec2::ZERO,
 			Vec2::from_degrees(direction) * crate::Game::BULLET_SPEED,
-			10.0,
+			self.damage,
 		)]
 	}
 
@@ -98,8 +116,9 @@ impl Weapon for Pistol {
 impl Default for Pistol {
 	fn default() -> Self {
 		Self {
-			cooldown: Cooldown::ready(Duration::from_secs_f32(0.35)),
+			cooldown: Cooldown::ready(Duration::from_secs_f32(0.5)),
 			ammo: Ammunition::Infinite,
+			damage: 7.5,
 		}
 	}
 }
@@ -108,6 +127,7 @@ impl Default for Pistol {
 pub struct Uzi {
 	cooldown: Cooldown,
 	ammo: Ammunition,
+	damage: f32,
 }
 
 impl Weapon for Uzi {
@@ -117,6 +137,14 @@ impl Weapon for Uzi {
 
 	fn ammo_mut(&mut self) -> &mut Ammunition {
 		&mut self.ammo
+	}
+
+	fn damage(&self) -> f32 {
+		self.damage
+	}
+
+	fn damage_mut(&mut self) -> &mut f32 {
+		&mut self.damage
 	}
 
 	fn cooldown(&self) -> &Cooldown {
@@ -133,7 +161,7 @@ impl Weapon for Uzi {
 		vec![Bullet::new(
 			Vec2::ZERO,
 			Vec2::from_degrees(direction) * crate::Game::BULLET_SPEED,
-			7.5,
+			self.damage,
 		)]
 	}
 
@@ -150,6 +178,7 @@ impl Default for Uzi {
 				capacity: 30,
 				rounds: 0,
 			},
+			damage: 6.5,
 		}
 	}
 }
@@ -158,6 +187,7 @@ impl Default for Uzi {
 pub struct Shotgun {
 	cooldown: Cooldown,
 	ammo: Ammunition,
+	damage: f32,
 }
 
 impl Weapon for Shotgun {
@@ -167,6 +197,14 @@ impl Weapon for Shotgun {
 
 	fn ammo_mut(&mut self) -> &mut Ammunition {
 		&mut self.ammo
+	}
+
+	fn damage(&self) -> f32 {
+		self.damage
+	}
+
+	fn damage_mut(&mut self) -> &mut f32 {
+		&mut self.damage
 	}
 
 	fn cooldown(&self) -> &Cooldown {
@@ -186,7 +224,7 @@ impl Weapon for Shotgun {
 			Bullet::new(
 				Vec2::ZERO,
 				Vec2::from_degrees(direction) * crate::Game::BULLET_SPEED,
-				15.0,
+				self.damage,
 			)
 		})
 		.take(3)
@@ -206,6 +244,7 @@ impl Default for Shotgun {
 				capacity: 10,
 				rounds: 0,
 			},
+			damage: 15.0,
 		}
 	}
 }

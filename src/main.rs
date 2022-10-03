@@ -41,6 +41,7 @@ fn main() {
 		enemies: vec![],
 		last_render: Instant::now(),
 		score: 0.0,
+		score_multiplier: Multiplier::default(),
 		barrels: vec![],
 		barrel_count: 100,
 		wave_count: 3,
@@ -50,8 +51,9 @@ fn main() {
 			.into_iter()
 			.map(|position| Pickup { position })
 			.collect(),
-		possible_pickups: vec![AmmoPickup::Uzi, AmmoPickup::Shotgun],
+		possible_pickups: vec![],
 		messages: VecDeque::with_capacity(10),
+		upgrades: Upgrade::upgrade_list(),
 	};
 
 	loop {
@@ -128,6 +130,7 @@ struct Game {
 	bullets: Vec<Bullet>,
 	enemies: Vec<Enemy>,
 	last_render: Instant,
+	score_multiplier: Multiplier,
 	score: f32,
 	barrels: Vec<Barrel>,
 	barrel_count: usize,
@@ -137,6 +140,7 @@ struct Game {
 	pickups: Vec<Pickup>,
 	possible_pickups: Vec<AmmoPickup>,
 	messages: VecDeque<Alert>,
+	upgrades: VecDeque<Upgrade>,
 }
 
 impl Game {
@@ -203,6 +207,9 @@ impl Game {
 	const WAVE_TIMER_HEIGHT: f32 = 0.5;
 
 	fn draw_ui(&self) {
+		let ghost = Color::rgba(0.0, 0.0, 0.0, 0.3);
+
+		// Score
 		self.smitten.write(
 			self.font,
 			&format!("{}", self.score),
@@ -211,11 +218,36 @@ impl Game {
 			1.0,
 		);
 
+		// Multiplier
+		let width = 3.0 * (1.0 - self.score_multiplier.percent());
+		self.smitten.anchored_rect(
+			(HorizontalAnchor::Center(0.0), VerticalAnchor::Top(-2.25)),
+			(3.0, 0.1),
+			Color::BLACK,
+		);
+
+		self.smitten.anchored_rect(
+			(
+				HorizontalAnchor::Center(width - 1.5),
+				VerticalAnchor::Top(-2.25 + 0.175),
+			),
+			(0.175, 0.5),
+			Color::BLACK,
+		);
+
+		self.smitten.write(
+			self.font,
+			format!("x{}", self.score_multiplier.current as usize),
+			(HorizontalAnchor::Center(-1.25), VerticalAnchor::Top(-2.75)),
+			Color::BLACK,
+			0.5,
+		);
+
 		// Wave timer
 		self.smitten.anchored_rect(
 			(HorizontalAnchor::Left(0.0), VerticalAnchor::Top(0.0)),
 			(DIM.0 as f32 / MUR as f32, Game::WAVE_TIMER_HEIGHT),
-			Color::rgba(0.0, 0.0, 0.0, 0.3),
+			ghost,
 		);
 
 		self.smitten.anchored_rect(
@@ -235,7 +267,7 @@ impl Game {
 					VerticalAnchor::Top(-Game::WAVE_TIMER_HEIGHT),
 				),
 				(5.0, self.messages.len() as f32 / 1.5 + 0.25),
-				Color::rgba(0.0, 0.0, 0.0, 0.3),
+				ghost,
 			);
 			self.write_messages();
 		}
@@ -314,8 +346,8 @@ impl Game {
 
 		let hits = Self::do_bullet_hits(&mut self.enemies, &mut self.bullets);
 		Self::burry_dead(&mut self.enemies)
-			.iter()
-			.for_each(|e| self.score += 123.0);
+			.into_iter()
+			.for_each(|e| self.enemy_killed(e));
 		self.tick_enemies(delta);
 
 		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets);
@@ -326,6 +358,57 @@ impl Game {
 			a.lifetime.subtract(delta);
 			!a.lifetime.is_ready()
 		});
+		self.score_multiplier.subtract(delta);
+	}
+
+	fn enemy_killed(&mut self, e: Enemy) {
+		self.score += 100.0 * self.score_multiplier.current;
+		self.score_multiplier.increment();
+
+		let mut todo = vec![];
+		loop {
+			match self.upgrades.front() {
+				None => return,
+				Some(up) => {
+					if up.score <= self.score {
+						todo.push(self.upgrades.pop_front().unwrap());
+					} else {
+						break;
+					}
+				}
+			}
+		}
+
+		for upgrade in todo {
+			self.push_alert(Alert::with_color(format!("{}", upgrade.kind), Color::GREEN));
+
+			macro_rules! cut_cooldown {
+				($index:literal) => {
+					self.player.weapons[$index].cooldown_mut().cooldown /= 2
+				};
+			}
+
+			macro_rules! double_damage {
+				($index:literal) => {
+					*self.player.weapons[$index].damage_mut() *= 2.0
+				};
+			}
+
+			macro_rules! unlock {
+				($index:literal $pickup:path) => {{
+					self.player.weapons[$index].ammo_mut().reload();
+					self.possible_pickups.push($pickup);
+				}};
+			}
+
+			match upgrade.kind {
+				UpgradeType::PistolFast => cut_cooldown!(0),
+				UpgradeType::UziUnlock => unlock!(1 AmmoPickup::Uzi),
+				UpgradeType::PistolDouble => double_damage!(0),
+				UpgradeType::ShotgunUnlock => unlock!(2 AmmoPickup::Shotgun),
+				UpgradeType::UziFast => cut_cooldown!(1),
+			}
+		}
 	}
 
 	pub fn shoot(&mut self) {
@@ -453,7 +536,7 @@ impl Game {
 		];
 
 		for (pos, dim) in walls {
-			self.rect(pos, dim, Color::BLACK)
+			self.rect(pos, dim, Color::WHITE)
 		}
 	}
 
@@ -501,11 +584,11 @@ impl Game {
 					radius: 4,
 					color: Color::grey(0.5),
 				});*/
-				let pixel_gap = (MUR as f32 - 1.0) / MUR as f32;
+				let pixel_gap = (MUR as f32 - 2.0) / MUR as f32;
 				self.smitten.rect(
 					pos,
 					Vec2::new(pixel_gap, pixel_gap),
-					Color::rgb(0.95, 0.95, 0.85),
+					Color::rgb(0.98, 0.98, 0.88),
 				)
 			}
 		}
@@ -622,7 +705,7 @@ impl Game {
 				position: Vec2::from(position) + wave_spawn,
 				color: Color::YELLOW,
 				health: 25.0,
-				speed: 0.5,
+				speed: 1.0,
 				cooldown: Cooldown::ready(Duration::from_secs(2)),
 				should_move_next_frame: true,
 			})
@@ -872,5 +955,123 @@ impl std::fmt::Display for AmmoPickup {
 		};
 
 		write!(f, "{}", stat)
+	}
+}
+
+struct Upgrade {
+	score: f32,
+	kind: UpgradeType,
+}
+
+impl Upgrade {
+	pub fn new(score: f32, kind: UpgradeType) -> Upgrade {
+		Self { score, kind }
+	}
+
+	pub fn upgrade_list() -> VecDeque<Upgrade> {
+		let mut ret = VecDeque::new();
+
+		macro_rules! upgrade {
+			($score:literal $kind:expr) => {
+				ret.push_back(Upgrade::new($score as f32, $kind));
+			};
+
+			($score:literal $kind:expr, $score2:literal $kind2:expr) => {
+				upgrade!($score $kind);
+				upgrade!($score2 $kind2);
+			};
+
+			($score:literal $kind:expr, $score2:literal $kind2:expr, $($scores:literal $kinds:expr),+) => {
+				upgrade!($score $kind);
+				upgrade!($score2 $kind2, $($scores $kinds),+);
+			}
+		}
+
+		upgrade!(
+			300 UpgradeType::PistolFast,
+			900 UpgradeType::UziUnlock,
+			1700 UpgradeType::PistolDouble,
+			2600 UpgradeType::ShotgunUnlock,
+			3500 UpgradeType::UziFast
+		);
+
+		ret
+	}
+}
+
+enum UpgradeType {
+	PistolFast,
+	UziUnlock,
+	PistolDouble,
+	ShotgunUnlock,
+	UziFast,
+}
+
+impl std::fmt::Display for UpgradeType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let stat = match self {
+			UpgradeType::PistolFast => "pistol fast fire",
+			UpgradeType::UziUnlock => "uzi unlocked",
+			UpgradeType::PistolDouble => "pistol double damge",
+			UpgradeType::ShotgunUnlock => "shotgun unlocked",
+			UpgradeType::UziFast => "uzi rapid fire",
+		};
+
+		write!(f, "{}", stat)
+	}
+}
+
+struct Multiplier {
+	current: f32,
+	cooldown: Cooldown,
+}
+
+impl Multiplier {
+	pub fn subtract(&mut self, delta: Duration) {
+		self.cooldown.subtract(delta);
+
+		if self.cooldown.is_ready() {
+			self.decrement();
+		}
+	}
+
+	pub fn percent(&self) -> f32 {
+		if self.current > 1.0 {
+			self.cooldown.percent()
+		} else {
+			0.0
+		}
+	}
+
+	pub fn decrement(&mut self) {
+		if self.current == 1.0 {
+			return;
+		}
+
+		self.current -= 1.0;
+		self.set_cooldown();
+	}
+
+	fn set_cooldown(&mut self) {
+		self.cooldown = Cooldown::waiting(Duration::from_millis(2000 - (self.current as u64 * 66)));
+	}
+
+	pub fn increment(&mut self) {
+		if self.current == 30.0 {
+			self.cooldown.reset();
+			return;
+		}
+
+		self.current += 1.0;
+		self.set_cooldown();
+	}
+}
+
+impl Default for Multiplier {
+	fn default() -> Self {
+		Self {
+			current: 1.0,
+			cooldown: Cooldown::ready(Duration::from_secs(2)),
+		}
 	}
 }
