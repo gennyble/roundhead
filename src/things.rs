@@ -104,3 +104,20 @@ impl Destructible for Barrel {
 		self.health
 	}
 }
+
+pub struct Pickup {
+	pub position: Vec2,
+}
+
+impl Colideable for Pickup {
+	fn bounds(&self) -> BoundingCircle {
+		BoundingCircle {
+			position: self.position,
+			radius: Game::PLAYER_LENGTH / 2.0,
+		}
+	}
+
+	fn position_mut(&mut self) -> &mut Vec2 {
+		&mut self.position
+	}
+}

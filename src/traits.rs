@@ -5,6 +5,13 @@ use crate::{things::Bullet, BoundingCircle};
 pub trait Colideable {
 	fn bounds(&self) -> BoundingCircle;
 	fn position_mut(&mut self) -> &mut Vec2;
+
+	fn colides_with<C: Colideable>(&self, other: &C) -> bool {
+		self.bounds()
+			.position
+			.distance_with(other.bounds().position)
+			< self.bounds().radius
+	}
 }
 
 pub trait Hittable: Colideable {

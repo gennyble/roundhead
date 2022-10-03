@@ -3,11 +3,13 @@
 mod things;
 mod traits;
 mod util;
+mod weapon;
 
 use rand::{thread_rng, Rng};
-use things::{Barrel, Bullet, Enemy};
+use things::{Barrel, Bullet, Enemy, Pickup};
 use traits::{Colideable, Destructible, Hittable};
 use util::Cooldown;
+use weapon::{Ammunition, Pistol, Uzi, Weapon};
 
 use std::{
 	ops::{Add, Mul, Sub},
@@ -42,6 +44,11 @@ fn main() {
 		barrel_count: 100,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
 		font,
+		pickups: Game::pickup_locations()
+			.into_iter()
+			.map(|position| Pickup { position })
+			.collect(),
+		possible_pickups: vec![AmmoPickup::Uzi],
 	};
 
 	loop {
@@ -56,6 +63,15 @@ fn main() {
 					game.place_barrel();
 				}
 			}
+			SmittenEvent::Keyup { key, .. } => match key {
+				Some(Key::Row1) => {
+					game.player.select_weapon(0);
+				}
+				Some(Key::Row2) => {
+					game.player.select_weapon(1);
+				}
+				_ => (),
+			},
 			_ => (),
 		});
 
@@ -111,6 +127,8 @@ struct Game {
 	barrel_count: usize,
 	wave_timer: Cooldown,
 	font: FontId,
+	pickups: Vec<Pickup>,
+	possible_pickups: Vec<AmmoPickup>,
 }
 
 impl Game {
@@ -142,6 +160,10 @@ impl Game {
 				radius: MUR / 2,
 				color: barrel.damage_color(),
 			})
+		}
+
+		for pickup in &self.pickups {
+			self.rect(pickup.position, Game::PLAYER_DIM / 2.0, Color::RED);
 		}
 
 		for enemy in &self.enemies {
@@ -196,11 +218,21 @@ impl Game {
 
 		self.smitten.write(
 			self.font,
-			"PISTOL",
+			self.player.weapon().name(),
 			(0.0, VerticalAnchor::Bottom(1.0)),
 			Color::BLACK,
 			0.5,
 		);
+
+		if let Ammunition::Limited { rounds, .. } = self.player.weapon().ammo() {
+			self.smitten.write(
+				self.font,
+				format!("{}", rounds),
+				(0.0, VerticalAnchor::Center(-1.0)),
+				Color::BLACK,
+				0.5,
+			);
+		}
 
 		self.smitten
 			.anchored_rect((0.0, 1.0), (2.0, 0.4), Color::rgba(0.0, 0.0, 0.0, 0.5));
@@ -236,7 +268,8 @@ impl Game {
 		self.barrels.iter().for_each(|barrel| {
 			colide_and_move(barrel, &mut self.player);
 		});
-		self.player.weapon.cooldown_mut().subtract(delta);
+		self.player.tick(delta);
+		self.check_pickups();
 
 		let hits = Self::do_bullet_hits(&mut self.enemies, &mut self.bullets);
 		Self::burry_dead(&mut self.enemies)
@@ -249,12 +282,18 @@ impl Game {
 	}
 
 	pub fn shoot(&mut self) {
-		if !self.player.weapon.is_ready() {
+		if !self.player.weapon().can_fire() {
 			return;
 		}
-		self.player.weapon.cooldown_mut().reset();
+		self.player.weapon_mut().cooldown_mut().reset();
+		self.player.weapon_mut().ammo_mut().decrement();
 
-		for mut bull in self.player.weapon.bullets(self.player.facing) {
+		// Switch back to the pistol if the current weapon just ran out of ammo
+		if self.player.weapon().ammo().is_empty() {
+			self.player.select_weapon(0);
+		}
+
+		for mut bull in self.player.weapon().bullets(self.player.facing) {
 			bull.position = self.player.position;
 
 			self.bullets.push(bull);
@@ -545,6 +584,50 @@ impl Game {
 			self.enemies.extend(randoms);
 		}
 	}
+
+	const PICKUP_SPACING: f32 = 5.0;
+
+	fn pickup_locations() -> Vec<Vec2> {
+		let mut ret = vec![];
+
+		let x_pickups = ((Game::ROOM_WIDTH - (Game::PICKUP_SPACING * 2.0)) / Game::PICKUP_SPACING)
+			.floor() as u32
+			- 2;
+		let y_pickups = ((Game::ROOM_HEIGHT - (Game::PICKUP_SPACING * 2.0)) / Game::PICKUP_SPACING)
+			.floor() as u32
+			- 2;
+
+		println!("pickup count: {x_pickups}x{y_pickups}");
+
+		for x in 0..x_pickups {
+			for y in 0..y_pickups {
+				ret.push(Vec2::new(
+					(-Game::ROOM_WIDTH / 2.0)
+						+ (x as f32 * Game::PICKUP_SPACING + Game::PICKUP_SPACING * 2.5),
+					(-Game::ROOM_HEIGHT / 2.0)
+						+ (y as f32 * Game::PICKUP_SPACING + Game::PICKUP_SPACING * 2.5),
+				))
+			}
+		}
+
+		ret
+	}
+
+	fn check_pickups(&mut self) {
+		let mut checked = vec![];
+
+		for pickup in self.pickups.drain(..) {
+			if pickup.colides_with(&self.player) {
+				let r: usize = thread_rng().gen_range(0..self.possible_pickups.len());
+				let pickup = self.possible_pickups[r];
+				self.player.pickedup(pickup);
+			} else {
+				checked.push(pickup);
+			}
+		}
+
+		self.pickups.extend(checked);
+	}
 }
 
 #[derive(Debug)]
@@ -552,7 +635,64 @@ struct Player {
 	position: Vec2,
 	facing: Vec2,
 	health: f32,
-	weapon: Box<dyn Weapon>,
+	weapons: Vec<Box<dyn Weapon>>,
+	selected_weapon: usize,
+}
+
+impl Player {
+	pub fn weapon(&self) -> &Box<dyn Weapon> {
+		&self.weapons[self.selected_weapon]
+	}
+
+	pub fn weapon_mut(&mut self) -> &mut Box<dyn Weapon> {
+		&mut self.weapons[self.selected_weapon]
+	}
+
+	pub fn tick(&mut self, delta: Duration) {
+		self.weapon_mut().cooldown_mut().subtract(delta);
+	}
+
+	/// Returns a bool indicating if the indexed weapon could be selected
+	pub fn select_weapon(&mut self, index: usize) -> bool {
+		println!("selecting {index}");
+		if index >= self.weapons.len() {
+			false
+		} else {
+			if self.weapons[index].ammo().is_empty() {
+				println!("Cannot select a weapon with no ammo");
+				return false;
+			}
+
+			self.selected_weapon = index;
+			true
+		}
+	}
+
+	/// Does not roll over
+	pub fn decrement_weapon(&mut self) -> bool {
+		if self.selected_weapon != 0 {
+			self.select_weapon(self.selected_weapon - 1)
+		} else {
+			false
+		}
+	}
+
+	/// Does not roll over
+	pub fn increment_weapon(&mut self) -> bool {
+		if self.selected_weapon == self.weapons.len() - 1 {
+			false
+		} else {
+			self.select_weapon(self.selected_weapon + 1)
+		}
+	}
+
+	pub fn pickedup(&mut self, pickedup: AmmoPickup) {
+		let weapon_index = match pickedup {
+			AmmoPickup::Uzi => 1,
+		};
+
+		self.weapons[weapon_index].ammo_mut().reload();
+	}
 }
 
 impl Colideable for Player {
@@ -574,7 +714,8 @@ impl Default for Player {
 			position: Default::default(),
 			facing: Vec2::new(0.0, 1.0),
 			health: Game::PLAYER_HEALTH_MAX,
-			weapon: Box::new(Pistol::default()),
+			weapons: vec![Box::new(Pistol::default()), Box::new(Uzi::default())],
+			selected_weapon: 0,
 		}
 	}
 }
@@ -620,53 +761,7 @@ fn colide_and_move<A: Colideable, B: Colideable>(a: &A, b: &mut B) -> bool {
 	}
 }
 
-#[derive(Debug)]
-struct Pistol {
-	cooldown: Cooldown,
-}
-
-impl Weapon for Pistol {
-	fn cooldown(&self) -> &Cooldown {
-		&self.cooldown
-	}
-
-	fn cooldown_mut(&mut self) -> &mut Cooldown {
-		&mut self.cooldown
-	}
-
-	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
-		let direction = direction.angle() + thread_rng().gen_range(-5.0..5.0);
-		println!("{direction}");
-
-		vec![Bullet::new(
-			Vec2::ZERO,
-			Vec2::from_degrees(direction) * Game::BULLET_SPEED,
-			10.0,
-		)]
-	}
-
-	fn name(&self) -> &'static str {
-		"Pistol"
-	}
-}
-
-impl Default for Pistol {
-	fn default() -> Self {
-		Self {
-			cooldown: Cooldown::ready(Duration::from_secs_f32(0.35)),
-		}
-	}
-}
-
-trait Weapon: core::fmt::Debug {
-	fn is_ready(&self) -> bool {
-		self.cooldown().is_ready()
-	}
-
-	fn cooldown(&self) -> &Cooldown;
-	fn cooldown_mut(&mut self) -> &mut Cooldown;
-
-	fn bullets(&self, direction: Vec2) -> Vec<Bullet>;
-
-	fn name(&self) -> &'static str;
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum AmmoPickup {
+	Uzi,
 }
