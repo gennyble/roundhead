@@ -54,6 +54,7 @@ fn main() {
 		possible_pickups: vec![],
 		messages: VecDeque::with_capacity(10),
 		upgrades: Upgrade::upgrade_list(),
+		paused: false,
 	};
 
 	loop {
@@ -81,6 +82,12 @@ fn main() {
 				}
 				Some(Key::Row4) => {
 					game.player.select_weapon(3);
+				}
+				_ => (),
+			},
+			SmittenEvent::Keyup { scancode, key } => match key {
+				Some(Key::P) => {
+					game.paused = true;
 				}
 				_ => (),
 			},
@@ -145,6 +152,7 @@ struct Game {
 	possible_pickups: Vec<AmmoPickup>,
 	messages: VecDeque<Alert>,
 	upgrades: VecDeque<Upgrade>,
+	paused: bool,
 }
 
 impl Game {
@@ -346,7 +354,7 @@ impl Game {
 		self.last_render = now;
 		let dsec = delta.as_secs_f64();
 
-		if self.player.health <= 0.0 {
+		if self.paused || self.player.health <= 0.0 {
 			return;
 		}
 
