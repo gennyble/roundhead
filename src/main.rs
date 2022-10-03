@@ -31,7 +31,7 @@ fn main() {
 	let mut smitty = Smitten::new(DIM, "Roundhead", MUR);
 
 	let cooldown = Cooldown::ready(Duration::from_secs(1));
-	let font = smitty.make_font("Cabin-Regular.ttf");
+	let font = smitty.make_font("Hack-Regular.ttf");
 	smitty.clear_color(Color::grey(0.5));
 
 	let mut game = Game {
@@ -674,38 +674,54 @@ impl Game {
 			let room_dim = (Vec2::new(Game::ROOM_WIDTH, Game::ROOM_HEIGHT) / 2.0)
 				- (Vec2::new(Game::WAVE_SPAWN_AREA, Game::WAVE_SPAWN_AREA) / 2.0);
 
-			// Top-Right, Bottom-Right, Bottom-Left, Top-Left
+			let mut quarter_center = room_dim / 2.0;
+			quarter_center -= quarter_center / 2.0;
+
+			// Top-Right, Bottom-Right, Bottom-Left, Top-Left, Center
 			let mut corners = vec![
 				room_dim,
 				room_dim.invert(false, true),
 				room_dim.invert(true, true),
 				room_dim.invert(true, false),
+				Vec2::new(-Game::WAVE_SPAWN_AREA / 2.0, -Game::WAVE_SPAWN_AREA / 2.0),
 			];
+
+			let in_center = self.player.position.x < quarter_center.x
+				&& self.player.position.x > -quarter_center.x
+				&& self.player.position.y < quarter_center.y
+				&& self.player.position.y > -quarter_center.y;
 
 			// What corner we don't want to spawn in.
 			corners.swap_remove(
-				match (self.player.position.x > 0.0, self.player.position.y > 0.0) {
-					(true, true) => 0,
-					(true, false) => 1,
-					(false, false) => 2,
-					(false, true) => 3,
+				match (
+					self.player.position.x > 0.0,
+					self.player.position.y > 0.0,
+					in_center,
+				) {
+					(_, _, true) => 4,
+					(true, true, false) => 0,
+					(true, false, false) => 1,
+					(false, false, false) => 2,
+					(false, true, false) => 3,
 				},
 			);
 
-			let wave_spawn = corners[thread_rng().gen_range(0..corners.len())];
-
 			let randoms: Vec<Enemy> = std::iter::from_fn(move || {
-				Some((
-					thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
-					thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
-				))
+				let corner = corners[thread_rng().gen_range(0..corners.len())];
+				Some(
+					corner
+						+ Vec2::new(
+							thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
+							thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
+						),
+				)
 			})
 			.take(self.wave_count)
 			.map(|position| Enemy {
-				position: Vec2::from(position) + wave_spawn,
+				position,
 				color: Color::YELLOW,
 				health: 25.0,
-				speed: 1.0,
+				speed: 0.75,
 				cooldown: Cooldown::ready(Duration::from_secs(2)),
 				should_move_next_frame: true,
 			})
