@@ -42,6 +42,7 @@ fn main() {
 		score: 0.0,
 		barrels: vec![],
 		barrel_count: 100,
+		wave_count: 3,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
 		font,
 		pickups: Game::pickup_locations()
@@ -125,6 +126,7 @@ struct Game {
 	score: f32,
 	barrels: Vec<Barrel>,
 	barrel_count: usize,
+	wave_count: usize,
 	wave_timer: Cooldown,
 	font: FontId,
 	pickups: Vec<Pickup>,
@@ -570,7 +572,7 @@ impl Game {
 					thread_rng().gen_range(0.0..Game::WAVE_SPAWN_AREA),
 				))
 			})
-			.take(3)
+			.take(self.wave_count)
 			.map(|position| Enemy {
 				position: Vec2::from(position) + wave_spawn,
 				color: Color::YELLOW,
@@ -582,6 +584,7 @@ impl Game {
 			.collect();
 
 			self.enemies.extend(randoms);
+			self.wave_count += 1;
 		}
 	}
 
