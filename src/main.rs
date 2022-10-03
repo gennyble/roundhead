@@ -63,7 +63,13 @@ fn main() {
 			SmittenEvent::MouseDown { button } => {
 				game.shoot();
 			}
-			SmittenEvent::Keyup { key, .. } => match key {
+			SmittenEvent::Keydown { key, .. } => match key {
+				Some(Key::Q) => {
+					game.player.decrement_weapon();
+				}
+				Some(Key::E) => {
+					game.player.increment_weapon();
+				}
 				Some(Key::Row1) => {
 					game.player.select_weapon(0);
 				}
