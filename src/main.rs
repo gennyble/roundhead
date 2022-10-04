@@ -413,7 +413,7 @@ impl Game {
 		let mut todo = vec![];
 		loop {
 			match self.upgrades.front() {
-				None => return,
+				None => break,
 				Some(up) => {
 					if up.score <= self.score {
 						todo.push(self.upgrades.pop_front().unwrap());
@@ -461,6 +461,8 @@ impl Game {
 				UpgradeType::WallUnlock => unlock!(3 AmmoPickup::Wall),
 				UpgradeType::UziDoubleAmmo => double_ammo!(1),
 				UpgradeType::ShotgunFast => cut_cooldown!(2),
+				UpgradeType::ShotgunDoubleAmmo => double_ammo!(2),
+				UpgradeType::WallDoubleAmmo => double_ammo!(3),
 			}
 		}
 	}
@@ -793,7 +795,7 @@ impl Game {
 						),
 				)
 			})
-			.take(self.wave_count)
+			.take(3 + self.score_multiplier.current as usize)
 			.map(|position| Enemy {
 				position,
 				color: Color::YELLOW,
@@ -1117,11 +1119,14 @@ impl Upgrade {
 			300 UpgradeType::PistolFast,
 			900 UpgradeType::UziUnlock,
 			1700 UpgradeType::PistolDouble,
-			2600 UpgradeType::ShotgunUnlock,
-			3500 UpgradeType::UziFast,
-			4100 UpgradeType::WallUnlock,
-			4700 UpgradeType::UziDoubleAmmo,
-			5200 UpgradeType::ShotgunFast
+			6500 UpgradeType::ShotgunUnlock,
+			10000 UpgradeType::UziFast,
+			56000 UpgradeType::WallUnlock,
+			96500 UpgradeType::UziDoubleAmmo,
+			100000 UpgradeType::ShotgunFast,
+			// Grenade unlock
+			125000 UpgradeType::ShotgunDoubleAmmo,
+			175000 UpgradeType::WallDoubleAmmo
 		);
 
 		ret
@@ -1137,6 +1142,10 @@ enum UpgradeType {
 	WallUnlock,
 	UziDoubleAmmo,
 	ShotgunFast,
+	//Grenade unlock,
+	ShotgunDoubleAmmo,
+	// Uzi long shot?
+	WallDoubleAmmo,
 }
 
 impl std::fmt::Display for UpgradeType {
@@ -1150,6 +1159,8 @@ impl std::fmt::Display for UpgradeType {
 			UpgradeType::WallUnlock => "wallls unlocked",
 			UpgradeType::UziDoubleAmmo => "uzi double ammo",
 			UpgradeType::ShotgunFast => "shotgun fast fire",
+			UpgradeType::ShotgunDoubleAmmo => "shotgun double ammo",
+			UpgradeType::WallDoubleAmmo => "wall double ammo",
 		};
 
 		write!(f, "{}", stat)
