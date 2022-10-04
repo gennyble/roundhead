@@ -638,20 +638,26 @@ impl Game {
 				let x = x as f32 - mur_width as f32 / 2.0;
 				let y = y as f32 - mur_height as f32 / 2.0;
 
+				let pos_incorrect =
+					Vec2::new(x.floor(), y.floor()) - self.player.position.operation(f32::trunc);
+
+				let light = Color::rgb(0.88, 0.88, 0.78);
+				let dark = Color::rgb(0.68, 0.68, 0.58);
+
+				let color = match (
+					pos_incorrect.x.abs().floor() as u32 % 2 == 0,
+					pos_incorrect.y.abs().floor() as u32 % 2 == 0,
+				) {
+					(true, true) => light,
+					(false, true) => dark,
+					(true, false) => dark,
+					(false, false) => light,
+				};
+
 				let camera = self.player.position.operation(f32::fract);
 
 				let pos = Vec2::new(x.floor(), y.floor()) - camera;
-				/*self.smitten.sdf(SignedDistance::Circle {
-					center: pos,
-					radius: 4,
-					color: Color::grey(0.5),
-				});*/
-				let pixel_gap = (MUR as f32 - 2.0) / MUR as f32;
-				self.smitten.rect(
-					pos,
-					Vec2::new(pixel_gap, pixel_gap),
-					Color::rgb(0.98, 0.98, 0.88),
-				)
+				self.smitten.rect(pos, Vec2::new(1.0, 1.0), color)
 			}
 		}
 	}
