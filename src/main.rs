@@ -40,7 +40,7 @@ fn main() {
 		enemies: vec![Enemy {
 			position: Vec2::new(0.0, 5.0),
 			color: PURPLE,
-			health: 100.0,
+			health: 1.0,
 			speed: 0.1,
 			cooldown: Cooldown::waiting(Duration::from_secs(1000)),
 			should_move_next_frame: true,
@@ -50,6 +50,7 @@ fn main() {
 		score_multiplier: Multiplier::default(),
 		walls: vec![],
 		barrels: vec![],
+		explosions: vec![],
 		wave_count: 3,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
 		font,
@@ -160,6 +161,7 @@ struct Game {
 	score: f32,
 	walls: Vec<thing::Wall>,
 	barrels: Vec<thing::Barrel>,
+	explosions: Vec<Explosion>,
 	wave_count: usize,
 	wave_timer: Cooldown,
 	font: FontId,
@@ -235,6 +237,16 @@ impl Game {
 			radius: (Game::PLAYER_LENGTH * MUR as f32 / 2.0).floor() as u32,
 			color: TURQUOISE,
 		});
+
+		for explosion in &self.explosions {
+			self.smitten.sdf(SignedDistance::Circle {
+				center: explosion.position - self.player.position,
+				radius: (explosion.starting_radius
+					+ explosion.ending_radius * explosion.cooldown.percent())
+				.round() as u32,
+				color: Color::rgba(1.0, 0.8, 0.4, 0.3),
+			})
+		}
 
 		self.draw_walls();
 		self.draw_ui();
@@ -372,6 +384,30 @@ impl Game {
 		}
 	}
 
+	fn reap<T, F>(vec: &mut Vec<T>, f: F) -> Vec<T>
+	where
+		F: Fn(&mut T) -> bool,
+	{
+		let mut reaped = vec![];
+
+		let mut looked = vec![];
+		loop {
+			match vec.pop() {
+				None => {
+					vec.extend(looked);
+					return reaped;
+				}
+				Some(mut a) => {
+					if f(&mut a) {
+						reaped.push(a);
+					} else {
+						looked.push(a);
+					}
+				}
+			}
+		}
+	}
+
 	pub fn tick(&mut self) {
 		let now = Instant::now();
 		let delta = now.duration_since(self.last_render);
@@ -381,6 +417,11 @@ impl Game {
 		if self.paused || self.player.health <= 0.0 {
 			return;
 		}
+
+		self.explosions
+			.iter_mut()
+			.for_each(|expl| expl.cooldown.subtract(delta));
+		Self::reap(&mut self.explosions, |e| e.cooldown.is_ready());
 
 		self.wave_things(delta);
 
@@ -524,6 +565,12 @@ impl Game {
 			if explosive.details().colides_with(&self.player) {
 				explosive.explode_on(&mut self.player)
 			}
+			self.explosions.push(Explosion {
+				position: explosive.details().position,
+				starting_radius: 16.0,
+				ending_radius: explosive.details().radius * MUR as f32,
+				cooldown: Cooldown::waiting(Duration::from_millis(100)),
+			});
 		}
 	}
 
@@ -1325,4 +1372,11 @@ impl Default for Multiplier {
 			cooldown: Cooldown::ready(Duration::from_secs(2)),
 		}
 	}
+}
+
+struct Explosion {
+	position: Vec2,
+	starting_radius: f32,
+	ending_radius: f32,
+	cooldown: Cooldown,
 }
