@@ -1,4 +1,4 @@
-use std::{num::NonZeroUsize, time::Duration};
+use std::time::Duration;
 
 use rand::{thread_rng, Rng};
 use smitten::Vec2;
@@ -31,6 +31,7 @@ pub enum Ammunition {
 }
 
 impl Ammunition {
+	#[allow(dead_code)]
 	pub fn is_infinte(&self) -> bool {
 		if let Self::Infinite = self {
 			true
@@ -60,7 +61,7 @@ impl Ammunition {
 	}
 
 	pub fn scale_magazine(&mut self, scalar: f32) {
-		if let Self::Limited { capacity, rounds } = self {
+		if let Self::Limited { capacity, .. } = self {
 			*capacity = (*capacity as f32 * scalar).round() as u32;
 		}
 	}

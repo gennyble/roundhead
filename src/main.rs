@@ -23,14 +23,13 @@ use smitten::{
 };
 
 const TURQUOISE: Color = Color::rgb8(0x33, 0xaa, 0x88);
-const PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
+const _PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
 const MUR: u32 = 48;
 const DIM: (u32, u32) = (1280, 960);
 
 fn main() {
 	let mut smitty = Smitten::new(DIM, "Roundhead", MUR);
 
-	let cooldown = Cooldown::ready(Duration::from_secs(1));
 	let font = smitty.make_font("Hack-Regular.ttf");
 	smitty.clear_color(Color::grey(0.5));
 
@@ -62,9 +61,6 @@ fn main() {
 		let events = game.smitten.events();
 
 		events.iter().for_each(|e| match e {
-			SmittenEvent::MouseDown { button } => {
-				game.shoot();
-			}
 			SmittenEvent::Keydown { key, .. } => match key {
 				Some(Key::Q) => {
 					game.player.decrement_weapon();
@@ -86,9 +82,13 @@ fn main() {
 				}
 				_ => (),
 			},
-			SmittenEvent::Keyup { scancode, key } => match key {
+			SmittenEvent::Keyup { key, .. } => match key {
 				Some(Key::P) => {
-					game.paused = true;
+					if game.paused {
+						game.paused = false;
+					} else {
+						game.paused = true;
+					}
 				}
 				_ => (),
 			},
@@ -379,7 +379,7 @@ impl Game {
 		self.check_pickups();
 		self.do_pickup_respawn(delta);
 
-		let hits = Self::do_bullet_hits(
+		let _hits = Self::do_bullet_hits(
 			&mut self.enemies,
 			&mut self.bullets,
 			Some(self.player.position),
@@ -389,7 +389,7 @@ impl Game {
 			.for_each(|e| self.enemy_killed(e));
 		self.tick_enemies(delta);
 
-		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
+		let _barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
 		Self::burry_dead(&mut self.barrels);
 
 		// Messages
@@ -707,7 +707,7 @@ impl Game {
 					//desired sepration
 					let wanted = dir.normalize_correct() * (enemy.bounds().radius - dir.length());
 
-					let collective_speed = enemy.speed + other.speed;
+					let _collective_speed = enemy.speed + other.speed;
 
 					enemy.position += wanted; //* (collective_speed - (enemy.speed / collective_speed));
 						  /*other.position -=
@@ -984,7 +984,7 @@ impl Default for Player {
 	}
 }
 
-struct BoundingCircle {
+pub struct BoundingCircle {
 	position: Vec2,
 	radius: f32,
 }
