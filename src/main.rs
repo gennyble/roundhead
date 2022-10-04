@@ -928,19 +928,27 @@ impl Player {
 	/// Does not roll over
 	pub fn decrement_weapon(&mut self) -> bool {
 		if self.selected_weapon != 0 {
-			self.select_weapon(self.selected_weapon - 1)
-		} else {
-			false
+			for idx in (0..self.selected_weapon - 1).rev() {
+				if self.select_weapon(idx) {
+					return true;
+				}
+			}
 		}
+
+		false
 	}
 
 	/// Does not roll over
 	pub fn increment_weapon(&mut self) -> bool {
-		if self.selected_weapon == self.weapons.len() - 1 {
-			false
-		} else {
-			self.select_weapon(self.selected_weapon + 1)
+		if self.selected_weapon < self.weapons.len() - 1 {
+			for idx in self.selected_weapon + 1..self.weapons.len() {
+				if self.select_weapon(idx) {
+					return true;
+				}
+			}
 		}
+
+		false
 	}
 
 	pub fn pickedup(&mut self, pickedup: AmmoPickup) {
