@@ -404,6 +404,12 @@ impl Game {
 		self.score += 100.0 * self.score_multiplier.current;
 		self.score_multiplier.increment();
 
+		if thread_rng().gen_range(0..100) < 1 {
+			self.pickups.push(Pickup {
+				position: e.position,
+			});
+		}
+
 		let mut todo = vec![];
 		loop {
 			match self.upgrades.front() {
