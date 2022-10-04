@@ -52,6 +52,7 @@ fn main() {
 			.map(|position| Pickup { position })
 			.collect(),
 		possible_pickups: vec![],
+		pickup_respawn: Cooldown::waiting(Duration::from_secs(5)),
 		messages: VecDeque::with_capacity(10),
 		upgrades: Upgrade::upgrade_list(),
 		paused: false,
@@ -150,6 +151,7 @@ struct Game {
 	font: FontId,
 	pickups: Vec<Pickup>,
 	possible_pickups: Vec<AmmoPickup>,
+	pickup_respawn: Cooldown,
 	messages: VecDeque<Alert>,
 	upgrades: VecDeque<Upgrade>,
 	paused: bool,
@@ -191,12 +193,12 @@ impl Game {
 		}
 
 		for enemy in &self.enemies {
-			//self.rect(enemy.position, Game::PLAYER_DIM, enemy.color)
-			self.smitten.sdf(SignedDistance::Circle {
+			self.rect(enemy.position, Game::PLAYER_DIM, enemy.color)
+			/*self.smitten.sdf(SignedDistance::Circle {
 				center: enemy.position - self.player.position,
 				radius: (Game::PLAYER_LENGTH * MUR as f32 / 2.0).floor() as u32,
 				color: enemy.color,
-			})
+			})*/
 		}
 
 		// Draw us. We're not affected by player.position movement
@@ -375,6 +377,7 @@ impl Game {
 		});
 		self.player.tick(delta);
 		self.check_pickups();
+		self.do_pickup_respawn(delta);
 
 		let hits = Self::do_bullet_hits(
 			&mut self.enemies,
@@ -853,6 +856,27 @@ impl Game {
 
 		if self.messages.len() > 10 {
 			self.messages.pop_front();
+		}
+	}
+
+	fn do_pickup_respawn(&mut self, delta: Duration) {
+		self.pickup_respawn.subtract(delta);
+
+		if self.pickup_respawn.is_ready() {
+			self.pickup_respawn.reset();
+
+			let positions = Self::pickup_locations();
+			let r = thread_rng().gen_range(0..positions.len());
+			let position = positions[r];
+
+			for pik in &self.pickups {
+				if pik.position == position {
+					return;
+				}
+			}
+
+			println!("Pickup at {position:.2}");
+			self.pickups.push(Pickup { position });
 		}
 	}
 }
