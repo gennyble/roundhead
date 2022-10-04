@@ -986,6 +986,7 @@ impl Game {
 	}
 
 	fn push_alert(&mut self, alert: Alert) {
+		println!("{}", alert.message);
 		self.messages.push_back(alert);
 
 		if self.messages.len() > 10 {
@@ -1085,8 +1086,8 @@ impl Player {
 		let weapon_index = match pickedup {
 			AmmoPickup::Uzi => 1,
 			AmmoPickup::Shotgun => 2,
-			AmmoPickup::Wall => 3,
-			AmmoPickup::Barrel => 4,
+			AmmoPickup::Wall => 4,
+			AmmoPickup::Barrel => 3,
 		};
 
 		self.weapons[weapon_index].ammo_mut().reload();
