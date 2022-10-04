@@ -31,11 +31,17 @@ pub trait Destructible {
 pub trait Explosive {
 	fn details(&self) -> ExplosiveDetails;
 
-	fn explode_on<T>(&self, thing: &mut T)
+	fn explode_on<T>(&self, thing: &mut T, knockback: bool)
 	where
 		T: Colideable + Destructible,
 	{
-		*thing.health_mut() -= self.details().damage;
+		let direction = thing.bounds().position - self.details().position;
+		let magnitude = 1.0 / direction.length();
+		*thing.health_mut() -= self.details().damage * magnitude;
+
+		if knockback {
+			*thing.position_mut() += direction * magnitude;
+		}
 	}
 }
 

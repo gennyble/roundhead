@@ -458,7 +458,7 @@ impl Game {
 		let _wall_hits = Self::do_bullet_hits(&mut self.walls, &mut self.bullets, None);
 		Self::burry_dead(&mut self.walls);
 
-		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
+		let _barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
 		let barrels = Self::burry_dead(&mut self.barrels);
 		self.explode(barrels);
 
@@ -546,24 +546,24 @@ impl Game {
 		for explosive in explosives {
 			for wall in self.walls.iter_mut() {
 				if explosive.details().colides_with(wall) {
-					explosive.explode_on(wall);
+					explosive.explode_on(wall, false);
 				}
 			}
 
 			for enemy in self.enemies.iter_mut() {
 				if explosive.details().colides_with(enemy) {
-					explosive.explode_on(enemy);
+					explosive.explode_on(enemy, true);
 				}
 			}
 
 			for barrel in self.barrels.iter_mut() {
 				if explosive.details().colides_with(barrel) {
-					explosive.explode_on(barrel);
+					explosive.explode_on(barrel, false);
 				}
 			}
 
 			if explosive.details().colides_with(&self.player) {
-				explosive.explode_on(&mut self.player)
+				explosive.explode_on(&mut self.player, true)
 			}
 			self.explosions.push(Explosion {
 				position: explosive.details().position,
@@ -1058,7 +1058,7 @@ impl Player {
 	/// Does not roll over
 	pub fn decrement_weapon(&mut self) -> bool {
 		if self.selected_weapon != 0 {
-			for idx in (0..self.selected_weapon - 1).rev() {
+			for idx in (0..self.selected_weapon).rev() {
 				if self.select_weapon(idx) {
 					return true;
 				}

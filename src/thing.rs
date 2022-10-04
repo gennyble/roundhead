@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use smitten::{Color, Vec2};
 
 use crate::{
@@ -145,6 +143,6 @@ impl Destructible for Barrel {
 
 impl Explosive for Barrel {
 	fn details(&self) -> crate::traits::ExplosiveDetails {
-		ExplosiveDetails::new(25.0, self.position, 1.5)
+		ExplosiveDetails::new(25.0, self.position, 3.0)
 	}
 }
