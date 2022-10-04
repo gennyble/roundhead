@@ -24,6 +24,38 @@ pub trait Weapon: core::fmt::Debug {
 	fn name(&self) -> &'static str;
 }
 
+macro_rules! weapon_common_impl {
+	($name:literal) => {
+		fn ammo(&self) -> &Ammunition {
+			&self.ammo
+		}
+
+		fn ammo_mut(&mut self) -> &mut Ammunition {
+			&mut self.ammo
+		}
+
+		fn damage(&self) -> f32 {
+			self.damage
+		}
+
+		fn damage_mut(&mut self) -> &mut f32 {
+			&mut self.damage
+		}
+
+		fn cooldown(&self) -> &Cooldown {
+			&self.cooldown
+		}
+
+		fn cooldown_mut(&mut self) -> &mut Cooldown {
+			&mut self.cooldown
+		}
+
+		fn name(&self) -> &'static str {
+			$name
+		}
+	};
+}
+
 #[derive(Debug)]
 pub enum Ammunition {
 	Infinite,
@@ -94,29 +126,7 @@ pub struct Pistol {
 }
 
 impl Weapon for Pistol {
-	fn ammo(&self) -> &Ammunition {
-		&self.ammo
-	}
-
-	fn ammo_mut(&mut self) -> &mut Ammunition {
-		&mut self.ammo
-	}
-
-	fn damage(&self) -> f32 {
-		self.damage
-	}
-
-	fn damage_mut(&mut self) -> &mut f32 {
-		&mut self.damage
-	}
-
-	fn cooldown(&self) -> &Cooldown {
-		&self.cooldown
-	}
-
-	fn cooldown_mut(&mut self) -> &mut Cooldown {
-		&mut self.cooldown
-	}
+	weapon_common_impl!("Pistol");
 
 	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
 		let direction = direction.angle() + thread_rng().gen_range(-5.0..5.0);
@@ -126,10 +136,6 @@ impl Weapon for Pistol {
 			Vec2::from_degrees(direction) * crate::Game::BULLET_SPEED,
 			self.damage,
 		)]
-	}
-
-	fn name(&self) -> &'static str {
-		"Pistol"
 	}
 }
 
@@ -151,29 +157,7 @@ pub struct Uzi {
 }
 
 impl Weapon for Uzi {
-	fn ammo(&self) -> &Ammunition {
-		&self.ammo
-	}
-
-	fn ammo_mut(&mut self) -> &mut Ammunition {
-		&mut self.ammo
-	}
-
-	fn damage(&self) -> f32 {
-		self.damage
-	}
-
-	fn damage_mut(&mut self) -> &mut f32 {
-		&mut self.damage
-	}
-
-	fn cooldown(&self) -> &Cooldown {
-		&self.cooldown
-	}
-
-	fn cooldown_mut(&mut self) -> &mut Cooldown {
-		&mut self.cooldown
-	}
+	weapon_common_impl!("Uzi");
 
 	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
 		let direction = direction.angle() + thread_rng().gen_range(-5.0..5.0);
@@ -183,10 +167,6 @@ impl Weapon for Uzi {
 			Vec2::from_degrees(direction) * crate::Game::BULLET_SPEED,
 			self.damage,
 		)]
-	}
-
-	fn name(&self) -> &'static str {
-		"Uzi"
 	}
 }
 
@@ -211,29 +191,7 @@ pub struct Shotgun {
 }
 
 impl Weapon for Shotgun {
-	fn ammo(&self) -> &Ammunition {
-		&self.ammo
-	}
-
-	fn ammo_mut(&mut self) -> &mut Ammunition {
-		&mut self.ammo
-	}
-
-	fn damage(&self) -> f32 {
-		self.damage
-	}
-
-	fn damage_mut(&mut self) -> &mut f32 {
-		&mut self.damage
-	}
-
-	fn cooldown(&self) -> &Cooldown {
-		&self.cooldown
-	}
-
-	fn cooldown_mut(&mut self) -> &mut Cooldown {
-		&mut self.cooldown
-	}
+	weapon_common_impl!("Shotgun");
 
 	fn bullets(&self, direction: Vec2) -> Vec<Bullet> {
 		let mut inaccuracy = 1.5;
@@ -249,10 +207,6 @@ impl Weapon for Shotgun {
 		})
 		.take(3)
 		.collect()
-	}
-
-	fn name(&self) -> &'static str {
-		"Shotgun"
 	}
 }
 
@@ -277,36 +231,10 @@ pub struct Wall {
 }
 
 impl Weapon for Wall {
-	fn ammo(&self) -> &Ammunition {
-		&self.ammo
-	}
-
-	fn ammo_mut(&mut self) -> &mut Ammunition {
-		&mut self.ammo
-	}
-
-	fn damage(&self) -> f32 {
-		self.damage
-	}
-
-	fn damage_mut(&mut self) -> &mut f32 {
-		&mut self.damage
-	}
-
-	fn cooldown(&self) -> &Cooldown {
-		&self.cooldown
-	}
-
-	fn cooldown_mut(&mut self) -> &mut Cooldown {
-		&mut self.cooldown
-	}
+	weapon_common_impl!("Walls");
 
 	fn bullets(&self, _direction: Vec2) -> Vec<Bullet> {
 		unreachable!("Called bullets on wall")
-	}
-
-	fn name(&self) -> &'static str {
-		"Walls"
 	}
 }
 
@@ -331,36 +259,10 @@ pub struct Barrel {
 }
 
 impl Weapon for Barrel {
-	fn ammo(&self) -> &Ammunition {
-		&self.ammo
-	}
-
-	fn ammo_mut(&mut self) -> &mut Ammunition {
-		&mut self.ammo
-	}
-
-	fn damage(&self) -> f32 {
-		self.damage
-	}
-
-	fn damage_mut(&mut self) -> &mut f32 {
-		&mut self.damage
-	}
-
-	fn cooldown(&self) -> &Cooldown {
-		&self.cooldown
-	}
-
-	fn cooldown_mut(&mut self) -> &mut Cooldown {
-		&mut self.cooldown
-	}
+	weapon_common_impl!("Barrels");
 
 	fn bullets(&self, _direction: Vec2) -> Vec<Bullet> {
 		unreachable!("Called bullets on barrel")
-	}
-
-	fn name(&self) -> &'static str {
-		"Barrels"
 	}
 }
 
