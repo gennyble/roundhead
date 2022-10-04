@@ -3,29 +3,11 @@ use std::time::Instant;
 use smitten::{Color, Vec2};
 
 use crate::{
-	traits::{Colideable, Destructible, Hittable},
+	traits::{Colideable, Destructible, Explosive, ExplosiveDetails, Hittable},
 	util::Cooldown,
+	weapon::Bullet,
 	BoundingCircle, Game,
 };
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Bullet {
-	pub position: Vec2,
-	pub velocity: Vec2,
-	pub birth: Instant,
-	pub damage: f32,
-}
-
-impl Bullet {
-	pub fn new(position: Vec2, velocity: Vec2, damage: f32) -> Self {
-		Self {
-			position,
-			velocity,
-			birth: Instant::now(),
-			damage,
-		}
-	}
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Enemy {
@@ -60,27 +42,27 @@ impl Destructible for Enemy {
 	fn health(&self) -> f32 {
 		self.health
 	}
+
+	fn health_mut(&mut self) -> &mut f32 {
+		&mut self.health
+	}
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Barrel {
+pub struct Wall {
 	pub position: Vec2,
 	pub health: f32,
 }
 
-impl Barrel {
-	pub const BARREL_HEALTH: f32 = 100.0;
+impl Wall {
+	pub const WALL_HEALTH: f32 = 100.0;
 
 	pub fn damage_color(&self) -> Color {
-		crate::color_lerp(
-			Color::WHITE,
-			Color::BLACK,
-			self.health / Barrel::BARREL_HEALTH,
-		)
+		crate::color_lerp(Color::WHITE, Color::BLACK, self.health / Wall::WALL_HEALTH)
 	}
 }
 
-impl Colideable for Barrel {
+impl Colideable for Wall {
 	fn bounds(&self) -> BoundingCircle {
 		BoundingCircle {
 			position: self.position,
@@ -93,15 +75,19 @@ impl Colideable for Barrel {
 	}
 }
 
-impl Hittable for Barrel {
+impl Hittable for Wall {
 	fn hit(&mut self, bullet: &Bullet) {
 		self.health -= bullet.damage;
 	}
 }
 
-impl Destructible for Barrel {
+impl Destructible for Wall {
 	fn health(&self) -> f32 {
 		self.health
+	}
+
+	fn health_mut(&mut self) -> &mut f32 {
+		&mut self.health
 	}
 }
 
@@ -119,5 +105,46 @@ impl Colideable for Pickup {
 
 	fn position_mut(&mut self) -> &mut Vec2 {
 		&mut self.position
+	}
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Barrel {
+	pub position: Vec2,
+	pub health: f32,
+}
+
+impl Colideable for Barrel {
+	fn bounds(&self) -> BoundingCircle {
+		BoundingCircle {
+			position: self.position,
+			radius: 1.0,
+		}
+	}
+
+	fn position_mut(&mut self) -> &mut Vec2 {
+		&mut self.position
+	}
+}
+
+impl Hittable for Barrel {
+	fn hit(&mut self, _bullet: &Bullet) {
+		self.health = 0.0;
+	}
+}
+
+impl Destructible for Barrel {
+	fn health(&self) -> f32 {
+		self.health
+	}
+
+	fn health_mut(&mut self) -> &mut f32 {
+		&mut self.health
+	}
+}
+
+impl Explosive for Barrel {
+	fn details(&self) -> crate::traits::ExplosiveDetails {
+		ExplosiveDetails::new(25.0, self.position, 1.5)
 	}
 }

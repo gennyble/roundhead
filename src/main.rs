@@ -1,15 +1,15 @@
 #![feature(drain_filter)]
 
-mod things;
+mod thing;
 mod traits;
 mod util;
 mod weapon;
 
 use rand::{thread_rng, Rng};
-use things::{Barrel, Bullet, Enemy, Pickup};
-use traits::{Colideable, Destructible, Hittable};
+use thing::{Enemy, Pickup};
+use traits::{Colideable, Destructible, Explosive, Hittable};
 use util::Cooldown;
-use weapon::{Ammunition, Pistol, Shotgun, Uzi, Wall, Weapon};
+use weapon::{Ammunition, Bullet, Pistol, Shotgun, Uzi, Weapon};
 
 use std::{
 	collections::VecDeque,
@@ -23,7 +23,7 @@ use smitten::{
 };
 
 const TURQUOISE: Color = Color::rgb8(0x33, 0xaa, 0x88);
-const _PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
+const PURPLE: Color = Color::rgb(0.9, 0.8, 0.85);
 const MUR: u32 = 48;
 const DIM: (u32, u32) = (1280, 960);
 
@@ -37,12 +37,19 @@ fn main() {
 		smitten: smitty,
 		player: Player::default(),
 		bullets: vec![],
-		enemies: vec![],
+		enemies: vec![Enemy {
+			position: Vec2::new(0.0, 5.0),
+			color: PURPLE,
+			health: 100.0,
+			speed: 0.1,
+			cooldown: Cooldown::waiting(Duration::from_secs(1000)),
+			should_move_next_frame: true,
+		}],
 		last_render: Instant::now(),
 		score: 0.0,
 		score_multiplier: Multiplier::default(),
+		walls: vec![],
 		barrels: vec![],
-		barrel_count: 100,
 		wave_count: 3,
 		wave_timer: Cooldown::ready(Duration::from_secs_f32(10.0)),
 		font,
@@ -80,6 +87,9 @@ fn main() {
 				Some(Key::Row4) => {
 					game.player.select_weapon(3);
 				}
+				Some(Key::Row5) => {
+					game.player.select_weapon(4);
+				}
 				_ => (),
 			},
 			SmittenEvent::Keyup { key, .. } => match key {
@@ -100,7 +110,11 @@ fn main() {
 		}
 
 		if game.smitten.is_key_down(Key::Space) {
-			game.shoot();
+			if !game.player.must_release_shoot {
+				game.shoot();
+			}
+		} else if game.player.must_release_shoot {
+			game.player.must_release_shoot = false;
 		}
 
 		if game.smitten.is_key_down(Key::P) {
@@ -144,8 +158,8 @@ struct Game {
 	last_render: Instant,
 	score_multiplier: Multiplier,
 	score: f32,
-	barrels: Vec<Barrel>,
-	barrel_count: usize,
+	walls: Vec<thing::Wall>,
+	barrels: Vec<thing::Barrel>,
 	wave_count: usize,
 	wave_timer: Cooldown,
 	font: FontId,
@@ -180,11 +194,19 @@ impl Game {
 			})
 		}
 
+		for wall in &self.walls {
+			self.smitten.sdf(SignedDistance::Circle {
+				center: wall.position - self.player.position,
+				radius: MUR / 2,
+				color: wall.damage_color(),
+			})
+		}
+
 		for barrel in &self.barrels {
 			self.smitten.sdf(SignedDistance::Circle {
 				center: barrel.position - self.player.position,
 				radius: MUR / 2,
-				color: barrel.damage_color(),
+				color: Color::rgb8(235, 147, 25),
 			})
 		}
 
@@ -372,8 +394,11 @@ impl Game {
 			.for_each(|bul| bul.position += bul.velocity * dsec as f32);
 
 		Self::collide_walls(&mut self.player);
-		self.barrels.iter().for_each(|barrel| {
-			colide_and_move(barrel, &mut self.player);
+		self.walls.iter().for_each(|wall| {
+			colide_and_move(wall, &mut self.player);
+		});
+		self.barrels.iter().for_each(|wall| {
+			colide_and_move(wall, &mut self.player);
 		});
 		self.player.tick(delta);
 		self.check_pickups();
@@ -389,8 +414,12 @@ impl Game {
 			.for_each(|e| self.enemy_killed(e));
 		self.tick_enemies(delta);
 
-		let _barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
-		Self::burry_dead(&mut self.barrels);
+		let _wall_hits = Self::do_bullet_hits(&mut self.walls, &mut self.bullets, None);
+		Self::burry_dead(&mut self.walls);
+
+		let barrel_hits = Self::do_bullet_hits(&mut self.barrels, &mut self.bullets, None);
+		let barrels = Self::burry_dead(&mut self.barrels);
+		self.explode(barrels);
 
 		// Messages
 		self.messages.retain_mut(|a| {
@@ -403,6 +432,10 @@ impl Game {
 	fn enemy_killed(&mut self, e: Enemy) {
 		self.score += 100.0 * self.score_multiplier.current;
 		self.score_multiplier.increment();
+
+		if e.color == PURPLE {
+			self.score += 1_000_000.0;
+		}
 
 		if thread_rng().gen_range(0..100) < 1 {
 			self.pickups.push(Pickup {
@@ -458,11 +491,38 @@ impl Game {
 				UpgradeType::PistolDouble => double_damage!(0),
 				UpgradeType::ShotgunUnlock => unlock!(2 AmmoPickup::Shotgun),
 				UpgradeType::UziFast => cut_cooldown!(1),
-				UpgradeType::WallUnlock => unlock!(3 AmmoPickup::Wall),
+				UpgradeType::BarrelUnlock => unlock!(3 AmmoPickup::Barrel),
 				UpgradeType::UziDoubleAmmo => double_ammo!(1),
 				UpgradeType::ShotgunFast => cut_cooldown!(2),
 				UpgradeType::ShotgunDoubleAmmo => double_ammo!(2),
-				UpgradeType::WallDoubleAmmo => double_ammo!(3),
+				UpgradeType::BarrelDoubleAmmo => double_ammo!(3),
+				UpgradeType::WallUnlock => unlock!(4 AmmoPickup::Wall),
+			}
+		}
+	}
+
+	fn explode<E: Explosive>(&mut self, explosives: Vec<E>) {
+		for explosive in explosives {
+			for wall in self.walls.iter_mut() {
+				if explosive.details().colides_with(wall) {
+					explosive.explode_on(wall);
+				}
+			}
+
+			for enemy in self.enemies.iter_mut() {
+				if explosive.details().colides_with(enemy) {
+					explosive.explode_on(enemy);
+				}
+			}
+
+			for barrel in self.barrels.iter_mut() {
+				if explosive.details().colides_with(barrel) {
+					explosive.explode_on(barrel);
+				}
+			}
+
+			if explosive.details().colides_with(&self.player) {
+				explosive.explode_on(&mut self.player)
 			}
 		}
 	}
@@ -473,14 +533,16 @@ impl Game {
 		}
 		self.player.weapon_mut().cooldown_mut().reset();
 
-		if self.player.selected_weapon != 3 {
+		if !self.player.weapon_is_object() {
 			for mut bull in self.player.weapon().bullets(self.player.facing) {
 				bull.position = self.player.position;
 
 				self.bullets.push(bull);
 			}
 		} else {
-			self.place_barrel();
+			if !self.place_object() {
+				return;
+			}
 		}
 
 		self.player.weapon_mut().ammo_mut().decrement();
@@ -491,11 +553,7 @@ impl Game {
 		}
 	}
 
-	pub fn place_barrel(&mut self) {
-		if self.barrel_count == 0 {
-			return;
-		}
-
+	pub fn place_object(&mut self) -> bool {
 		let direction = self.player.facing;
 
 		let place_direction = if direction.x.abs() > direction.y.abs() {
@@ -516,16 +574,33 @@ impl Game {
 
 		let position = (self.player.position + place_direction).operation(f32::round);
 
-		if self.has_barrel_at(position) {
-			println!("Barrel already at {position}, not placing another!");
-			return;
+		if self.has_wall_at(position) || self.has_barrel_at(position) {
+			println!("Object already at {position}, not placing another!");
+			return false;
 		}
-		self.barrel_count -= 1;
 
-		self.barrels.push(Barrel {
-			position,
-			health: Barrel::BARREL_HEALTH,
-		});
+		if self.player.selected_weapon == 4 {
+			self.walls.push(thing::Wall {
+				position,
+				health: thing::Wall::WALL_HEALTH,
+			});
+
+			true
+		} else if self.player.selected_weapon == 3 {
+			self.barrels.push(thing::Barrel {
+				position,
+				health: 1.0,
+			});
+
+			true
+		} else {
+			println!("Something called place_object but the current weapoin is not an object!");
+			false
+		}
+	}
+
+	fn has_wall_at(&self, pos: Vec2) -> bool {
+		self.walls.iter().find(|bar| bar.position == pos).is_some()
 	}
 
 	fn has_barrel_at(&self, pos: Vec2) -> bool {
@@ -685,14 +760,18 @@ impl Game {
 				}
 			}
 
-			for barrel in self.barrels.iter_mut() {
+			for wall in self.walls.iter_mut() {
 				enemy.should_move_next_frame = false;
-				if colide_and_move(barrel, enemy) {
+				if colide_and_move(wall, enemy) {
 					if enemy.cooldown.is_ready() {
 						enemy.cooldown.reset();
-						barrel.health -= 6.66;
+						wall.health -= 6.66;
 					}
 				}
+			}
+
+			for barrel in self.barrels.iter() {
+				colide_and_move(barrel, enemy);
 			}
 		}
 
@@ -895,6 +974,7 @@ struct Player {
 	facing: Vec2,
 	health: f32,
 	weapons: Vec<Box<dyn Weapon>>,
+	must_release_shoot: bool,
 	selected_weapon: usize,
 }
 
@@ -914,6 +994,7 @@ impl Player {
 	/// Returns a bool indicating if the indexed weapon could be selected
 	pub fn select_weapon(&mut self, index: usize) -> bool {
 		println!("selecting {index}");
+		self.must_release_shoot = true;
 		if index >= self.weapons.len() {
 			false
 		} else {
@@ -958,9 +1039,14 @@ impl Player {
 			AmmoPickup::Uzi => 1,
 			AmmoPickup::Shotgun => 2,
 			AmmoPickup::Wall => 3,
+			AmmoPickup::Barrel => 4,
 		};
 
 		self.weapons[weapon_index].ammo_mut().reload();
+	}
+
+	pub fn weapon_is_object(&self) -> bool {
+		self.selected_weapon == 3 || self.selected_weapon == 4
 	}
 }
 
@@ -977,6 +1063,16 @@ impl Colideable for Player {
 	}
 }
 
+impl Destructible for Player {
+	fn health(&self) -> f32 {
+		self.health
+	}
+
+	fn health_mut(&mut self) -> &mut f32 {
+		&mut self.health
+	}
+}
+
 impl Default for Player {
 	fn default() -> Self {
 		Self {
@@ -987,8 +1083,10 @@ impl Default for Player {
 				Box::new(Pistol::default()),
 				Box::new(Uzi::default()),
 				Box::new(Shotgun::default()),
-				Box::new(Wall::default()),
+				Box::new(weapon::Barrel::default()),
+				Box::new(weapon::Wall::default()),
 			],
+			must_release_shoot: false,
 			selected_weapon: 0,
 		}
 	}
@@ -1040,6 +1138,7 @@ enum AmmoPickup {
 	Uzi,
 	Shotgun,
 	Wall,
+	Barrel,
 }
 
 #[derive(Clone, Debug)]
@@ -1080,6 +1179,7 @@ impl std::fmt::Display for AmmoPickup {
 			AmmoPickup::Uzi => "uzi ammo",
 			AmmoPickup::Shotgun => "shotgun ammo",
 			AmmoPickup::Wall => "wall ammo",
+			AmmoPickup::Barrel => "barrel ammo",
 		};
 
 		write!(f, "{}", stat)
@@ -1121,12 +1221,13 @@ impl Upgrade {
 			1700 UpgradeType::PistolDouble,
 			6500 UpgradeType::ShotgunUnlock,
 			10000 UpgradeType::UziFast,
-			56000 UpgradeType::WallUnlock,
+			56000 UpgradeType::BarrelUnlock,
 			96500 UpgradeType::UziDoubleAmmo,
 			100000 UpgradeType::ShotgunFast,
 			// Grenade unlock
 			125000 UpgradeType::ShotgunDoubleAmmo,
-			175000 UpgradeType::WallDoubleAmmo
+			175000 UpgradeType::BarrelDoubleAmmo,
+			250000 UpgradeType::WallUnlock
 		);
 
 		ret
@@ -1139,13 +1240,16 @@ enum UpgradeType {
 	PistolDouble,
 	ShotgunUnlock,
 	UziFast,
-	WallUnlock,
+	BarrelUnlock,
 	UziDoubleAmmo,
 	ShotgunFast,
 	//Grenade unlock,
 	ShotgunDoubleAmmo,
 	// Uzi long shot?
-	WallDoubleAmmo,
+	BarrelDoubleAmmo,
+	WallUnlock,
+	// Shotgun wide shot?
+	// Barrel big bang
 }
 
 impl std::fmt::Display for UpgradeType {
@@ -1156,11 +1260,12 @@ impl std::fmt::Display for UpgradeType {
 			UpgradeType::PistolDouble => "pistol double damge",
 			UpgradeType::ShotgunUnlock => "shotgun unlocked",
 			UpgradeType::UziFast => "uzi rapid fire",
-			UpgradeType::WallUnlock => "wallls unlocked",
+			UpgradeType::BarrelUnlock => "barrels unlocked",
 			UpgradeType::UziDoubleAmmo => "uzi double ammo",
 			UpgradeType::ShotgunFast => "shotgun fast fire",
 			UpgradeType::ShotgunDoubleAmmo => "shotgun double ammo",
-			UpgradeType::WallDoubleAmmo => "wall double ammo",
+			UpgradeType::BarrelDoubleAmmo => "barrel double ammo",
+			UpgradeType::WallUnlock => "wall unlock",
 		};
 
 		write!(f, "{}", stat)

@@ -1,9 +1,9 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rand::{thread_rng, Rng};
 use smitten::Vec2;
 
-use crate::{things::Bullet, util::Cooldown};
+use crate::util::Cooldown;
 
 pub trait Weapon: core::fmt::Debug {
 	fn can_fire(&self) -> bool {
@@ -63,6 +63,25 @@ impl Ammunition {
 	pub fn scale_magazine(&mut self, scalar: f32) {
 		if let Self::Limited { capacity, .. } = self {
 			*capacity = (*capacity as f32 * scalar).round() as u32;
+		}
+	}
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Bullet {
+	pub position: Vec2,
+	pub velocity: Vec2,
+	pub birth: Instant,
+	pub damage: f32,
+}
+
+impl Bullet {
+	pub fn new(position: Vec2, velocity: Vec2, damage: f32) -> Self {
+		Self {
+			position,
+			velocity,
+			birth: Instant::now(),
+			damage,
 		}
 	}
 }
@@ -287,7 +306,7 @@ impl Weapon for Wall {
 	}
 
 	fn name(&self) -> &'static str {
-		"Wall"
+		"Walls"
 	}
 }
 
@@ -299,7 +318,61 @@ impl Default for Wall {
 				capacity: 5,
 				rounds: 0,
 			},
-			damage: 7.5,
+			damage: 0.0,
+		}
+	}
+}
+
+#[derive(Debug)]
+pub struct Barrel {
+	cooldown: Cooldown,
+	ammo: Ammunition,
+	damage: f32,
+}
+
+impl Weapon for Barrel {
+	fn ammo(&self) -> &Ammunition {
+		&self.ammo
+	}
+
+	fn ammo_mut(&mut self) -> &mut Ammunition {
+		&mut self.ammo
+	}
+
+	fn damage(&self) -> f32 {
+		self.damage
+	}
+
+	fn damage_mut(&mut self) -> &mut f32 {
+		&mut self.damage
+	}
+
+	fn cooldown(&self) -> &Cooldown {
+		&self.cooldown
+	}
+
+	fn cooldown_mut(&mut self) -> &mut Cooldown {
+		&mut self.cooldown
+	}
+
+	fn bullets(&self, _direction: Vec2) -> Vec<Bullet> {
+		unreachable!("Called bullets on barrel")
+	}
+
+	fn name(&self) -> &'static str {
+		"Barrels"
+	}
+}
+
+impl Default for Barrel {
+	fn default() -> Self {
+		Self {
+			cooldown: Cooldown::ready(Duration::from_secs_f32(0.25)),
+			ammo: Ammunition::Limited {
+				capacity: 5,
+				rounds: 0,
+			},
+			damage: 0.0,
 		}
 	}
 }
